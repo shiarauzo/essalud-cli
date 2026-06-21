@@ -1,22 +1,50 @@
 {
   "name": "essalud-cli",
   "version": "0.1.0",
-  "description": "CLI no oficial para reservar y cancelar citas de EsSalud",
+  "description": "CLI no oficial para reservar y cancelar citas de EsSalud desde la terminal",
   "type": "module",
   "bin": {
     "essalud": "./dist/essalud-bin.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "tsx src/essalud-bin.ts",
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepare": "tsc"
+  },
+  "keywords": [
+    "essalud",
+    "cli",
+    "peru",
+    "citas",
+    "salud",
+    "tramites"
+  ],
+  "author": "Shiara Arauzo",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shiarauzo/essalud-cli.git"
+  },
+  "homepage": "https://github.com/shiarauzo/essalud-cli#readme",
+  "bugs": {
+    "url": "https://github.com/shiarauzo/essalud-cli/issues"
   },
   "dependencies": {
     "@clack/prompts": "^1.6.0",
     "boxen": "^8.0.1",
     "commander": "^12.1.0",
     "figlet": "^1.11.0",
-    "picocolors": "^1.1.1"
+    "picocolors": "^1.1.1",
+    "playwright": "^1.61.0"
   },
   "devDependencies": {
     "@types/figlet": "^1.7.0",

@@ -1,19 +1,16 @@
 import { readFile, writeFile, mkdir, chmod } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join, dirname } from "node:path";
-import { createInterface } from "node:readline/promises";
-import { spawn } from "node:child_process";
-import { tmpdir } from "node:os";
+import { dirname } from "node:path";
+import { chromium, type Browser } from "playwright";
 import { TOKEN_PATH, PACIENTE_PATH, getPerfil, type Perfil, type PacienteData } from "./api.js";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const AGENT_BROWSER = "node /Users/shiara/Documents/personal-projects/agent-browser/bin/agent-browser.js";
-const SESSION_NAME = "essalud";
 const LOGIN_URL = "https://miconsulta.essalud.gob.pe/login";
 const API_HOST = "api.miconsulta.essalud.gob.pe";
+/** Tiempo máximo que esperamos a que el usuario complete el login en el navegador. */
+const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // Options
@@ -27,57 +24,88 @@ export interface LoginOptions {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers — run agent-browser command and capture stdout
+// JWT helpers
 // ---------------------------------------------------------------------------
 
-async function ab(...args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    // Split "node /path/to/script.js" prefix from args
-    const [nodeExe, scriptPath] = AGENT_BROWSER.split(" ");
-    const child = spawn(nodeExe, [scriptPath, ...args], {
-      stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, AGENT_BROWSER_SESSION: SESSION_NAME },
-    });
+/** Matchea un JWT (header.payload.signature en base64url). */
+const JWT_RE = /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/;
 
-    const chunks: Buffer[] = [];
-    const errChunks: Buffer[] = [];
-    child.stdout.on("data", (d: Buffer) => chunks.push(d));
-    child.stderr.on("data", (d: Buffer) => errChunks.push(d));
-
-    child.on("close", (code) => {
-      const stdout = Buffer.concat(chunks).toString("utf-8").trim();
-      if (code !== 0) {
-        const stderr = Buffer.concat(errChunks).toString("utf-8").trim();
-        reject(new Error(`agent-browser ${args[0]} failed (exit ${code}): ${stderr || stdout}`));
-      } else {
-        resolve(stdout);
-      }
-    });
-
-    child.on("error", reject);
-  });
+/** Un JWT de EsSalud decodifica con exp o scope en el payload. */
+function looksLikeEsSaludJwt(jwt: string): boolean {
+  try {
+    const part = jwt.split(".")[1] ?? "";
+    const json = Buffer.from(
+      part.replace(/-/g, "+").replace(/_/g, "/"),
+      "base64"
+    ).toString("utf-8");
+    const payload = JSON.parse(json) as { exp?: number; scope?: unknown };
+    return typeof payload.exp === "number" || payload.scope != null;
+  } catch {
+    return false;
+  }
 }
 
-/** Run agent-browser with the browser window visible (--headed), inheriting stdio. */
-async function abHeaded(...args: string[]): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const [nodeExe, scriptPath] = AGENT_BROWSER.split(" ");
-    const child = spawn(nodeExe, [scriptPath, "--headed", ...args], {
-      stdio: "inherit",
-      env: { ...process.env, AGENT_BROWSER_SESSION: SESSION_NAME, AGENT_BROWSER_HEADED: "1" },
-    });
+interface JwtPayload {
+  sub?: string;
+  exp?: number;
+  iat?: number;
+  [key: string]: unknown;
+}
 
-    child.on("close", (code) => {
-      if (code !== 0) reject(new Error(`agent-browser ${args[0]} failed (exit ${code})`));
-      else resolve();
-    });
-
-    child.on("error", reject);
-  });
+function decodeJwtPayload(jwt: string): JwtPayload | null {
+  try {
+    const parts = jwt.split(".");
+    if (parts.length !== 3) return null;
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+    return JSON.parse(Buffer.from(padded, "base64").toString("utf-8")) as JwtPayload;
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
-// HAR parsing
+// Paciente parsing (compartido entre login por navegador y por HAR)
+// ---------------------------------------------------------------------------
+
+/** Extrae los datos del paciente del body JSON de la respuesta /api/lg. */
+function parsePacienteFromLgBody(responseText: string): PacienteData | null {
+  if (!responseText) return null;
+  try {
+    const json = JSON.parse(responseText) as {
+      data?: {
+        paciente?: {
+          codCentro?: string;
+          desCentro?: string;
+          apePaterno?: string;
+          apeMaterno?: string;
+          nombres?: string;
+          email?: string;
+          nroCelular?: string;
+          celular?: string;
+        };
+      };
+    };
+
+    const raw = json?.data?.paciente;
+    if (!raw) return null;
+
+    return {
+      codCentro: raw.codCentro ?? "",
+      desCentro: raw.desCentro ?? "",
+      apePaterno: raw.apePaterno ?? "",
+      apeMaterno: raw.apeMaterno ?? "",
+      nombres: raw.nombres ?? null,
+      email: raw.email ?? null,
+      celular: raw.nroCelular ?? raw.celular ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// HAR parsing (para `--from-har`)
 // ---------------------------------------------------------------------------
 
 interface HarEntry {
@@ -98,24 +126,7 @@ interface HarFile {
   };
 }
 
-/** Extract the most-recent Bearer JWT from a HAR file. */
-const JWT_RE = /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/;
-
-/** Un JWT de EsSalud decodifica con exp o scope en el payload. */
-function looksLikeEsSaludJwt(jwt: string): boolean {
-  try {
-    const part = jwt.split(".")[1] ?? "";
-    const json = Buffer.from(
-      part.replace(/-/g, "+").replace(/_/g, "/"),
-      "base64"
-    ).toString("utf-8");
-    const payload = JSON.parse(json) as { exp?: number; scope?: unknown };
-    return typeof payload.exp === "number" || payload.scope != null;
-  } catch {
-    return false;
-  }
-}
-
+/** Extrae el JWT Bearer más reciente de un HAR. */
 export function extractTokenFromHar(harPath: string, harContent: string): string | null {
   let har: HarFile;
   try {
@@ -132,14 +143,12 @@ export function extractTokenFromHar(harPath: string, harContent: string): string
     const resp = entry.response;
 
     // 1) Header Authorization: Bearer <jwt> (cuando el HAR lo conserva).
-    const authHeader = req?.headers?.find(
-      (h) => h.name.toLowerCase() === "authorization"
-    );
+    const authHeader = req?.headers?.find((h) => h.name.toLowerCase() === "authorization");
     const authMatch = authHeader?.value.match(/Bearer\s+(\S+)/i);
     if (authMatch && looksLikeEsSaludJwt(authMatch[1])) candidates.push(authMatch[1]);
 
-    // 2) JWT embebido en el body de respuesta (el login /api/lg devuelve el token
-    //    ahí; Chrome NO exporta el header Authorization al HAR, pero sí el body).
+    // 2) JWT embebido en el body (el login /api/lg devuelve el token ahí; Chrome
+    //    NO exporta el header Authorization al HAR, pero sí el body).
     for (const blob of [resp?.content?.text ?? "", req?.postData?.text ?? ""]) {
       const m = blob.match(JWT_RE);
       if (m && looksLikeEsSaludJwt(m[0])) candidates.push(m[0]);
@@ -147,142 +156,11 @@ export function extractTokenFromHar(harPath: string, harContent: string): string
   }
 
   if (candidates.length === 0) return null;
-  // El más reciente (HARs son cronológicos).
+  // El más reciente (los HAR son cronológicos).
   return candidates[candidates.length - 1];
 }
 
-// ---------------------------------------------------------------------------
-// localStorage / sessionStorage / IndexedDB fallback via eval
-// ---------------------------------------------------------------------------
-
-/** Try to read the JWT from browser storage via JS eval. */
-async function extractTokenFromBrowserStorage(): Promise<string | null> {
-  const jsSnippet = `
-    (function() {
-      // Flutter web apps often store tokens in localStorage
-      var keys = Object.keys(localStorage);
-      for (var i = 0; i < keys.length; i++) {
-        var val = localStorage.getItem(keys[i]);
-        if (val && /^ey[A-Za-z0-9_-]+\\.ey[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+/.test(val)) {
-          return val;
-        }
-        // Some apps store JSON with a token field
-        if (val && val.startsWith('{')) {
-          try {
-            var obj = JSON.parse(val);
-            if (obj.token && typeof obj.token === 'string') return obj.token;
-            if (obj.accessToken && typeof obj.accessToken === 'string') return obj.accessToken;
-            if (obj.jwt && typeof obj.jwt === 'string') return obj.jwt;
-          } catch(e) {}
-        }
-      }
-      // Also check sessionStorage
-      keys = Object.keys(sessionStorage);
-      for (var i = 0; i < keys.length; i++) {
-        var val = sessionStorage.getItem(keys[i]);
-        if (val && /^ey[A-Za-z0-9_-]+\\.ey[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+/.test(val)) {
-          return val;
-        }
-      }
-      return null;
-    })()
-  `.trim();
-
-  try {
-    const result = await ab("eval", jsSnippet);
-    // agent-browser eval returns the stringified result; null comes back as "null"
-    if (result && result !== "null" && result.startsWith("ey")) {
-      return result.trim().replace(/^"(.*)"$/, "$1"); // strip surrounding quotes if any
-    }
-  } catch {
-    // Ignore eval errors — storage might not be accessible
-  }
-
-  return null;
-}
-
-// ---------------------------------------------------------------------------
-// network requests fallback — read from live capture
-// ---------------------------------------------------------------------------
-
-async function extractTokenFromNetworkRequests(): Promise<string | null> {
-  try {
-    const output = await ab("network", "requests", "--json", "--filter", API_HOST);
-    if (!output || output === "null" || output === "[]") return null;
-
-    // Parse as JSON array of request objects
-    const requests = JSON.parse(output) as Array<{
-      url?: string;
-      headers?: Record<string, string>;
-      requestHeaders?: Record<string, string>;
-    }>;
-
-    // Scan in reverse (most recent first)
-    for (let i = requests.length - 1; i >= 0; i--) {
-      const req = requests[i];
-      const headers = req.headers ?? req.requestHeaders ?? {};
-      const authValue = headers["authorization"] ?? headers["Authorization"] ?? "";
-      const match = authValue.match(/^Bearer\s+(.+)$/i);
-      if (match) return match[1].trim();
-    }
-  } catch {
-    // Not fatal — try other methods
-  }
-
-  return null;
-}
-
-// ---------------------------------------------------------------------------
-// JWT decode (no verify — just read exp)
-// ---------------------------------------------------------------------------
-
-interface JwtPayload {
-  sub?: string;
-  exp?: number;
-  iat?: number;
-  [key: string]: unknown;
-}
-
-function decodeJwtPayload(jwt: string): JwtPayload | null {
-  try {
-    const parts = jwt.split(".");
-    if (parts.length !== 3) return null;
-    // Add padding
-    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
-    return JSON.parse(Buffer.from(padded, "base64").toString("utf-8")) as JwtPayload;
-  } catch {
-    return null;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Save token
-// ---------------------------------------------------------------------------
-
-async function saveToken(jwt: string): Promise<void> {
-  const dir = dirname(TOKEN_PATH);
-  await mkdir(dir, { recursive: true });
-  await writeFile(TOKEN_PATH, jwt + "\n", { encoding: "utf-8", mode: 0o600 });
-  // Ensure permissions (writeFile mode may be masked by umask)
-  await chmod(TOKEN_PATH, 0o600);
-}
-
-// ---------------------------------------------------------------------------
-// Save paciente
-// ---------------------------------------------------------------------------
-
-async function savePaciente(paciente: PacienteData): Promise<void> {
-  const dir = dirname(PACIENTE_PATH);
-  await mkdir(dir, { recursive: true });
-  await writeFile(PACIENTE_PATH, JSON.stringify(paciente, null, 2) + "\n", {
-    encoding: "utf-8",
-    mode: 0o600,
-  });
-  await chmod(PACIENTE_PATH, 0o600);
-}
-
-/** Busca la entry /api/lg en el HAR y extrae datos del paciente de la respuesta JSON. */
+/** Busca la entry /api/lg en el HAR y extrae datos del paciente. */
 function extractPacienteFromHar(harContent: string): PacienteData | null {
   let har: { log?: { entries?: HarEntry[] } };
   try {
@@ -291,54 +169,133 @@ function extractPacienteFromHar(harContent: string): PacienteData | null {
     return null;
   }
 
-  const entries = har.log?.entries ?? [];
-
-  for (const entry of entries) {
-    const url = entry.request?.url ?? "";
-    // Buscar entry del endpoint de login (/api/lg o similar)
-    if (!url.includes("/api/lg")) continue;
-
-    const responseText = entry.response?.content?.text ?? "";
-    if (!responseText) continue;
-
-    try {
-      const json = JSON.parse(responseText) as {
-        data?: {
-          paciente?: {
-            codCentro?: string;
-            desCentro?: string;
-            apePaterno?: string;
-            apeMaterno?: string;
-            nombres?: string;
-            email?: string;
-            nroCelular?: string;
-            celular?: string;
-          };
-        };
-      };
-
-      const raw = json?.data?.paciente;
-      if (!raw) continue;
-
-      return {
-        codCentro: raw.codCentro ?? "",
-        desCentro: raw.desCentro ?? "",
-        apePaterno: raw.apePaterno ?? "",
-        apeMaterno: raw.apeMaterno ?? "",
-        nombres: raw.nombres ?? null,
-        email: raw.email ?? null,
-        celular: raw.nroCelular ?? raw.celular ?? null,
-      };
-    } catch {
-      // Seguir buscando en otras entries
-    }
+  for (const entry of har.log?.entries ?? []) {
+    if (!(entry.request?.url ?? "").includes("/api/lg")) continue;
+    const paciente = parsePacienteFromLgBody(entry.response?.content?.text ?? "");
+    if (paciente) return paciente;
   }
 
   return null;
 }
 
 // ---------------------------------------------------------------------------
-// Validate token by calling /perfil
+// Login por navegador (Playwright)
+// ---------------------------------------------------------------------------
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Abre un navegador real (headed), espera a que el usuario se loguee y captura
+ * el Bearer token y los datos del paciente directamente de la red.
+ * Devuelve null si no se pudo capturar (timeout, navegador cerrado, etc.).
+ */
+async function loginWithBrowser(): Promise<{ jwt: string; paciente: PacienteData | null } | null> {
+  let browser: Browser;
+  try {
+    browser = await chromium.launch({ headless: false });
+  } catch (err) {
+    const msg = String(err);
+    if (/Executable doesn't exist|playwright install/i.test(msg)) {
+      console.error("\nFalta el navegador de Playwright. Instalalo una sola vez con:");
+      console.error("  npx playwright install chromium\n");
+    } else {
+      console.error(`\nNo se pudo abrir el navegador: ${msg}\n`);
+    }
+    return null;
+  }
+
+  const context = await browser.newContext();
+  const page = await context.newPage();
+
+  let jwt: string | null = null;
+  let paciente: PacienteData | null = null;
+
+  // Capturar el Bearer de cualquier request autenticado a la API.
+  context.on("request", (req) => {
+    if (jwt || !req.url().includes(API_HOST)) return;
+    const auth = req.headers()["authorization"] ?? "";
+    const m = auth.match(/Bearer\s+(\S+)/i);
+    if (m && looksLikeEsSaludJwt(m[1])) jwt = m[1];
+  });
+
+  // Capturar paciente (y, como respaldo, el token) del body del login /api/lg.
+  context.on("response", async (res) => {
+    if (!res.url().includes("/api/lg")) return;
+    let body: string;
+    try {
+      body = await res.text();
+    } catch {
+      return;
+    }
+    paciente = parsePacienteFromLgBody(body) ?? paciente;
+    if (!jwt) {
+      const m = body.match(JWT_RE);
+      if (m && looksLikeEsSaludJwt(m[0])) jwt = m[0];
+    }
+  });
+
+  await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded" }).catch(() => {});
+
+  console.log();
+  console.log("─".repeat(60));
+  console.log("Se abrió un navegador en:");
+  console.log(`  ${LOGIN_URL}`);
+  console.log();
+  console.log("Pasos:");
+  console.log("  1. Ingresá tu DNI y clave.");
+  console.log("  2. Completá el captcha de Cloudflare Turnstile.");
+  console.log("  3. Esperá a ver tu panel (lista de citas).");
+  console.log();
+  console.log("Voy a capturar tu sesión automáticamente. No cierres esta terminal.");
+  console.log("─".repeat(60));
+
+  let browserClosed = false;
+  browser.on("disconnected", () => {
+    browserClosed = true;
+  });
+
+  const start = Date.now();
+  while (!jwt && !browserClosed && Date.now() - start < LOGIN_TIMEOUT_MS) {
+    await sleep(500);
+  }
+
+  await browser.close().catch(() => {});
+
+  if (!jwt) return null;
+  return { jwt, paciente };
+}
+
+// ---------------------------------------------------------------------------
+// Persistencia
+// ---------------------------------------------------------------------------
+
+async function saveToken(jwt: string): Promise<void> {
+  await mkdir(dirname(TOKEN_PATH), { recursive: true });
+  await writeFile(TOKEN_PATH, jwt + "\n", { encoding: "utf-8", mode: 0o600 });
+  // writeFile mode puede quedar enmascarado por el umask — forzamos los permisos.
+  await chmod(TOKEN_PATH, 0o600);
+}
+
+async function savePaciente(paciente: PacienteData): Promise<void> {
+  await mkdir(dirname(PACIENTE_PATH), { recursive: true });
+  await writeFile(PACIENTE_PATH, JSON.stringify(paciente, null, 2) + "\n", {
+    encoding: "utf-8",
+    mode: 0o600,
+  });
+  await chmod(PACIENTE_PATH, 0o600);
+}
+
+function pacienteLabel(paciente: PacienteData): string {
+  const nombre = [paciente.apePaterno, paciente.apeMaterno, paciente.nombres]
+    .filter(Boolean)
+    .join(" ");
+  return `${nombre} · ${paciente.desCentro}`;
+}
+
+// ---------------------------------------------------------------------------
+// Validación: confirma el token llamando a /perfil
 // ---------------------------------------------------------------------------
 
 async function validateAndPrint(jwt: string): Promise<void> {
@@ -368,13 +325,11 @@ async function validateAndPrint(jwt: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Main command
+// Comando principal
 // ---------------------------------------------------------------------------
 
 export async function cmdLogin(opts: LoginOptions = {}): Promise<void> {
-  // -------------------------------------------------------------------------
-  // Plan B: --token <jwt>
-  // -------------------------------------------------------------------------
+  // Plan B — token pegado a mano.
   if (opts.token) {
     const jwt = opts.token.trim().replace(/^Bearer\s+/i, "");
     if (!jwt.startsWith("ey")) {
@@ -387,9 +342,7 @@ export async function cmdLogin(opts: LoginOptions = {}): Promise<void> {
     return;
   }
 
-  // -------------------------------------------------------------------------
-  // Plan B: --from-har <path>
-  // -------------------------------------------------------------------------
+  // Plan B — importar desde un HAR exportado de DevTools.
   if (opts.fromHar) {
     let content: string;
     try {
@@ -409,125 +362,53 @@ export async function cmdLogin(opts: LoginOptions = {}): Promise<void> {
     await saveToken(jwt);
     console.log("Token extraído del HAR y guardado.");
 
-    // Intentar extraer y guardar datos del paciente desde /api/lg
     const paciente = extractPacienteFromHar(content);
     if (paciente) {
       await savePaciente(paciente);
-      console.log(`Paciente guardado: ${[paciente.apePaterno, paciente.apeMaterno, paciente.nombres].filter(Boolean).join(" ")} · ${paciente.desCentro}`);
+      console.log(`Paciente guardado: ${pacienteLabel(paciente)}`);
     }
 
     await validateAndPrint(jwt);
     return;
   }
 
-  // -------------------------------------------------------------------------
-  // Plan A: browser headed + captura automática
-  // -------------------------------------------------------------------------
-  const harPath = join(tmpdir(), `essalud-login-${Date.now()}.har`);
-
-  // Step 1 — open browser headed and start network capture
-  console.log("Abriendo browser...");
-  try {
-    await abHeaded("open", LOGIN_URL, "--wait-for", "load");
-  } catch (err) {
-    // Even if wait-for fails, the browser may have opened — continue
-    console.error(`Advertencia al abrir browser: ${String(err)}`);
-  }
-
-  // Start HAR capture (best-effort; agent-browser daemon persists across calls)
-  try {
-    await ab("network", "har", "start", harPath);
-  } catch {
-    // If HAR start fails, we'll rely on the network requests fallback
-  }
-
-  // Step 2 — instructions to user
-  console.log();
-  console.log("─".repeat(60));
-  console.log("Se abrió un browser en:");
-  console.log(`  ${LOGIN_URL}`);
-  console.log();
-  console.log("Pasos:");
-  console.log("  1. Ingresá tu DNI y clave en el browser.");
-  console.log("  2. Completá el captcha de Cloudflare Turnstile.");
-  console.log("  3. Esperá a ver tu panel/home (lista de citas).");
-  console.log("  4. Volvé a esta terminal y presioná ENTER.");
-  console.log("─".repeat(60));
-
-  // Step 3 — wait for user
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  await rl.question("\nCuando veas tu panel, presioná ENTER...");
-  rl.close();
-
-  // Step 4 — stop HAR and extract token
-  let jwt: string | null = null;
-
-  // 4a. Stop HAR and parse it
-  try {
-    await ab("network", "har", "stop", harPath);
-    const harContent = await readFile(harPath, "utf-8");
-    jwt = extractTokenFromHar(harPath, harContent);
-  } catch {
-    // HAR might not have captured auth headers (Flutter WASM quirk)
-  }
-
-  // 4b. Fallback: live network requests captured by agent-browser daemon
-  if (!jwt) {
-    jwt = await extractTokenFromNetworkRequests();
-  }
-
-  // 4c. Fallback: read from localStorage/sessionStorage via eval
-  if (!jwt) {
-    jwt = await extractTokenFromBrowserStorage();
-  }
-
-  // Step 5 & 6 — save and validate, or show error
-  if (jwt) {
-    // Step 5 — save (don't print)
-    await saveToken(jwt);
-
-    // Step 6 — validate and print result
+  // Plan A — navegador headed + captura automática (Playwright).
+  const result = await loginWithBrowser();
+  if (result) {
+    await saveToken(result.jwt);
+    if (result.paciente) {
+      await savePaciente(result.paciente);
+      console.log(`Paciente guardado: ${pacienteLabel(result.paciente)}`);
+    }
     try {
-      await validateAndPrint(jwt);
+      await validateAndPrint(result.jwt);
     } catch (err) {
       console.error(String(err));
       process.exit(1);
     }
-
-    // Close browser session
-    try {
-      await ab("close");
-    } catch {
-      // Non-fatal
-    }
-  } else {
-    // Step 7 — error + fallback instructions
-    console.error();
-    console.error("No se pudo capturar el token automáticamente.");
-    console.error("Posibles causas: no te logueaste, Turnstile bloqueó, o la sesión expiró.");
-    console.error();
-    console.error("Opciones para continuar:");
-    console.error();
-    console.error("  Opción A — pegar el token manualmente:");
-    console.error("    1. Abrí https://miconsulta.essalud.gob.pe en Chrome");
-    console.error("    2. Logueate y abrí DevTools (F12) → Network");
-    console.error("    3. Filtrá por 'api.miconsulta' → hacé click en cualquier request");
-    console.error("    4. En Headers, copiá el valor de: Authorization: Bearer <token>");
-    console.error("    5. Corré:");
-    console.error("         tramites-pe essalud login --token <token>");
-    console.error();
-    console.error("  Opción B — importar desde HAR:");
-    console.error("    1. En DevTools → Network → Export HAR (ícono de descarga)");
-    console.error("    2. Corré:");
-    console.error("         tramites-pe essalud login --from-har ~/Downloads/captura.har");
-    console.error();
-
-    try {
-      await ab("close");
-    } catch {
-      // Non-fatal
-    }
-
-    process.exit(1);
+    return;
   }
+
+  // Falló la captura automática → ofrecer los caminos manuales.
+  console.error();
+  console.error("No se pudo capturar el token automáticamente.");
+  console.error("Posibles causas: no completaste el login, Turnstile bloqueó, o cerraste el navegador.");
+  console.error();
+  console.error("Opciones para continuar:");
+  console.error();
+  console.error("  Opción A — pegar el token manualmente:");
+  console.error("    1. Abrí https://miconsulta.essalud.gob.pe en Chrome");
+  console.error("    2. Logueate y abrí DevTools (F12) → Network");
+  console.error("    3. Filtrá por 'api.miconsulta' → hacé click en cualquier request");
+  console.error("    4. En Headers, copiá el valor de: Authorization: Bearer <token>");
+  console.error("    5. Corré:");
+  console.error("         essalud login --token <token>");
+  console.error();
+  console.error("  Opción B — importar desde HAR:");
+  console.error("    1. En DevTools → Network → Export HAR (ícono de descarga)");
+  console.error("    2. Corré:");
+  console.error("         essalud login --from-har ~/Downloads/captura.har");
+  console.error();
+
+  process.exit(1);
 }
