@@ -1,0 +1,27 @@
+{
+  "name": "essalud-cli",
+  "version": "0.1.0",
+  "description": "CLI no oficial para reservar y cancelar citas de EsSalud",
+  "type": "module",
+  "bin": {
+    "essalud": "./dist/essalud-bin.js"
+  },
+  "scripts": {
+    "dev": "tsx src/essalud-bin.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.6.0",
+    "boxen": "^8.0.1",
+    "commander": "^12.1.0",
+    "figlet": "^1.11.0",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/figlet": "^1.7.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  }
+}
