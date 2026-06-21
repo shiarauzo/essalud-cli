@@ -47,7 +47,7 @@ export async function cmdReservar(opts: ReservarOptions): Promise<void> {
 
   // --nro-cupo es obligatorio (elige el slot de vCupoDisp)
   if (!opts.nroCupo) {
-    console.error("Error: falta --nro-cupo (elegí un slot de la salida de 'fechas').");
+    console.error("Error: falta --nro-cupo (elige un slot de la salida de 'fechas').");
     process.exit(1);
   }
   const nroCupo = Number(opts.nroCupo);
@@ -133,7 +133,7 @@ export async function cmdReservar(opts: ReservarOptions): Promise<void> {
   // DRY-RUN por defecto
   if (!opts.confirm) {
     console.log("[dry-run] No se realizó ninguna reserva real.");
-    console.log("Para reservar de verdad: agregá --confirm al comando.");
+    console.log("Para reservar de verdad: agrega --confirm al comando.");
     return;
   }
 

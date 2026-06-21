@@ -55,7 +55,7 @@ export async function cmdCancelar(
 
   if (!codCentro) {
     console.error(
-      "No encontré la cita ni su centro. Pasá el centro con --cod-centro <cod> (es el citCenAsiCod de la cita en `essalud citas`)."
+      "No encontré la cita ni su centro. Pasa el centro con --cod-centro <cod> (es el citCenAsiCod de la cita en `essalud citas`)."
     );
     process.exit(1);
   }
@@ -72,7 +72,7 @@ export async function cmdCancelar(
 
   if (!opts.confirm) {
     console.log("[dry-run] No se canceló nada.");
-    console.log("Para cancelar de verdad: agregá --confirm al comando.");
+    console.log("Para cancelar de verdad: agrega --confirm al comando.");
     return;
   }
 
