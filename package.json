@@ -20,6 +20,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "vitest run src/essalud/e2e.test.ts",
     "lint": "biome lint src/",
     "format": "biome check src/ --write",
     "check": "biome check src/",
