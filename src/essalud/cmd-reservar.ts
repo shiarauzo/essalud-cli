@@ -47,12 +47,12 @@ export async function cmdReservar(opts: ReservarOptions): Promise<void> {
 
   // --nro-cupo es obligatorio (elige el slot de vCupoDisp)
   if (!opts.nroCupo) {
-    console.error("Error: falta --nro-cupo (elegí un slot de la salida de 'fechas').");
+    console.error("Error: falta --nro-cupo (elige un slot de la salida de 'fechas').");
     process.exit(1);
   }
   const nroCupo = Number(opts.nroCupo);
   if (Number.isNaN(nroCupo)) {
-    console.error(`Error: --nro-cupo debe ser un número, recibí "${opts.nroCupo}".`);
+    console.error(`Error: --nro-cupo debe ser un número; se recibió "${opts.nroCupo}".`);
     process.exit(1);
   }
 
@@ -68,7 +68,7 @@ export async function cmdReservar(opts: ReservarOptions): Promise<void> {
   for (const field of requiredFields) {
     if (!cupoData[field]) {
       console.error(
-        `Error: falta el campo "${field}". Usá --cupo-json '<json>' o los flags individuales.`
+        `Error: falta el campo "${field}". Usa --cupo-json '<json>' o los flags individuales.`
       );
       process.exit(1);
     }
@@ -92,7 +92,7 @@ export async function cmdReservar(opts: ReservarOptions): Promise<void> {
 
   if (!numCelular || !email) {
     console.error(
-      "Error: no se encontró celular/email en el perfil. Pasalos con --celular y --email."
+      "Error: no se encontró celular/email en el perfil. Pásalos con --celular y --email."
     );
     process.exit(1);
   }
@@ -133,13 +133,13 @@ export async function cmdReservar(opts: ReservarOptions): Promise<void> {
   // DRY-RUN por defecto
   if (!opts.confirm) {
     console.log("[dry-run] No se realizó ninguna reserva real.");
-    console.log("Para reservar de verdad: agregá --confirm al comando.");
+    console.log("Para reservar de verdad: agrega --confirm al comando.");
     return;
   }
 
   // Confirmación interactiva obligatoria
   const ok = await confirmarInteractivo(
-    "ADVERTENCIA: Esto agenda una cita REAL en EsSalud. ¿Confirmás? (ocupa un cupo)"
+    "ADVERTENCIA: Esto agenda una cita REAL en EsSalud. ¿Confirmas? (ocupa un cupo)"
   );
 
   if (!ok) {

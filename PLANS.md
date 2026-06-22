@@ -62,7 +62,7 @@ que otros puedan instalar y mejorar.
 
 ### M1 — Español peruano (Usable)
 - **Entregables:** todo el texto convertido a tuteo peruano — mensajes del CLI, README, encabezado de `LICENSE`, `docs/goal.md`, `PLANS.md`, agente revisor.
-- **Aceptación:** `grep` no encuentra voseo ("querés/tenés/hacé/marcá/esperá/agregá/pasá/vos…") en el repo.
+- **Aceptación:** `grep` no encuentra formas de voseo (imperativos con tilde final tipo -á/-é/-í, ni el pronombre rioplatense) en código ni docs.
 
 ### M2 — Migración del token a `~/.essalud/` (Usable)
 - **Entregables:** `TOKEN_PATH`/`PACIENTE_PATH` apuntan a `~/.essalud/` en `api.ts`; sin fallback al viejo.

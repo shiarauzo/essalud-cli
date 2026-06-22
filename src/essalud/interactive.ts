@@ -1,6 +1,6 @@
 /**
  * Modo interactivo de EsSalud — menú estilo command palette usando @clack/prompts.
- * Se lanza cuando se corre `essalud` (o `tramites-pe essalud`) sin subcomando.
+ * Se lanza cuando se corre `essalud` sin subcomando.
  */
 import * as p from "@clack/prompts";
 import boxen from "boxen";
@@ -68,7 +68,7 @@ async function getTokenStatus(): Promise<TokenStatus> {
 
 function formatExpiry(ts: TokenStatus): string {
   if (!ts.valid || !ts.token) return "no logueado";
-  if (ts.expired) return "token vencido — hacé login nuevamente";
+  if (ts.expired) return "token vencido — haz login nuevamente";
   if (ts.expiresAt) {
     return `logueado · expira ${ts.expiresAt.toLocaleString("es-PE", { timeZone: "America/Lima" })}`;
   }
@@ -101,9 +101,9 @@ async function printBanner(ts: TokenStatus): Promise<void> {
   // Estado del token
   let estadoLine: string;
   if (!ts.valid || !ts.token) {
-    estadoLine = pc.yellow("no logueada — corré login");
+    estadoLine = pc.yellow("no logueada — corre login");
   } else if (ts.expired) {
-    estadoLine = pc.red("VENCIDO — corré login");
+    estadoLine = pc.red("VENCIDO — corre login");
   } else {
     // Extraer DNI del JWT (sub) o mostrar genérico
     let dniStr = "";
@@ -129,7 +129,7 @@ async function printBanner(ts: TokenStatus): Promise<void> {
   // Centro
   const centroLine = paciente?.desCentro
     ? `Centro: ${paciente.desCentro}`
-    : "Centro: (desconocido — corré login)";
+    : "Centro: (desconocido — corre login)";
 
   const content = [
     pc.bold("essalud · citas EsSalud"),
@@ -138,7 +138,7 @@ async function printBanner(ts: TokenStatus): Promise<void> {
     estadoLine,
     centroLine,
     "",
-    pc.dim("Elegí una opción ↓"),
+    pc.dim("Elige una opción ↓"),
   ].join("\n");
 
   console.log(
@@ -160,10 +160,10 @@ async function requireLogin(ts: TokenStatus): Promise<boolean> {
   if (ts.valid && !ts.expired) return true;
   p.log.warn(
     ts.expired
-      ? "Tu token venció. Necesitás hacer login nuevamente."
-      : "No hay sesión activa. Primero hacé login."
+      ? "Tu token venció. Necesitas hacer login nuevamente."
+      : "No hay sesión activa. Primero haz login."
   );
-  const ir = await p.confirm({ message: "¿Querés hacer login ahora?" });
+  const ir = await p.confirm({ message: "¿Quieres hacer login ahora?" });
   if (p.isCancel(ir) || !ir) return false;
   await runLogin();
   return true;
@@ -229,7 +229,7 @@ async function runCitas(ts: TokenStatus): Promise<void> {
     const citas = await getCitasEmitidas();
     s.stop(`${citas.length} cita(s) encontrada(s).`);
     if (citas.length === 0) {
-      p.log.info("No tenés citas programadas.");
+      p.log.info("No tienes citas programadas.");
       return;
     }
     printCitas(citas);
@@ -301,7 +301,7 @@ async function runReservar(ts: TokenStatus): Promise<void> {
   }));
 
   const codServicioHosp = await p.select<string>({
-    message: "Elegí la especialidad",
+    message: "Elige la especialidad",
     options: servicioOptions,
   });
   if (p.isCancel(codServicioHosp)) return;
@@ -326,7 +326,7 @@ async function runReservar(ts: TokenStatus): Promise<void> {
       hint: a.desActHosp ?? a.codActSubAct,
     }));
     const chosenAct = await p.select<string>({
-      message: "Elegí la actividad",
+      message: "Elige la actividad",
       options: actOpts,
     });
     if (p.isCancel(chosenAct)) return;
@@ -352,7 +352,7 @@ async function runReservar(ts: TokenStatus): Promise<void> {
   }
 
   if (cupos.length === 0) {
-    p.log.warn("Sin programación disponible para esta especialidad/actividad. Intentá otra.");
+    p.log.warn("Sin programación disponible para esta especialidad/actividad. Intenta otra.");
     return;
   }
 
@@ -380,7 +380,7 @@ async function runReservar(ts: TokenStatus): Promise<void> {
   }));
 
   const chosenSlotIdx = await p.select<string>({
-    message: "Elegí un cupo",
+    message: "Elige un cupo",
     options: slotOpts,
   });
   if (p.isCancel(chosenSlotIdx)) return;
@@ -478,7 +478,7 @@ async function runCancelar(ts: TokenStatus): Promise<void> {
   }
 
   if (citas.length === 0) {
-    p.log.info("No tenés citas para cancelar.");
+    p.log.info("No tienes citas para cancelar.");
     return;
   }
 
@@ -495,7 +495,7 @@ async function runCancelar(ts: TokenStatus): Promise<void> {
   });
 
   const citaId = await p.select<string>({
-    message: "Elegí la cita a cancelar",
+    message: "Elige la cita a cancelar",
     options: opts,
   });
   if (p.isCancel(citaId)) return;
@@ -549,7 +549,7 @@ export async function runInteractiveMode(): Promise<void> {
     const loopTs = await getTokenStatus();
 
     const opcion = await p.select<MenuOption>({
-      message: "¿Qué querés hacer?",
+      message: "¿Qué quieres hacer?",
       options: [
         { value: "login", label: "Login", hint: "Iniciar sesión en EsSalud" },
         { value: "perfil", label: "Mi perfil", hint: "Ver datos del asegurado" },

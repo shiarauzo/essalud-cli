@@ -198,7 +198,7 @@ async function loginWithBrowser(): Promise<{ jwt: string; paciente: PacienteData
   } catch (err) {
     const msg = String(err);
     if (/Executable doesn't exist|playwright install/i.test(msg)) {
-      console.error("\nFalta el navegador de Playwright. Instalalo una sola vez con:");
+      console.error("\nFalta el navegador de Playwright. Instálalo una sola vez con:");
       console.error("  npx playwright install chromium\n");
     } else {
       console.error(`\nNo se pudo abrir el navegador: ${msg}\n`);
@@ -244,9 +244,9 @@ async function loginWithBrowser(): Promise<{ jwt: string; paciente: PacienteData
   console.log(`  ${LOGIN_URL}`);
   console.log();
   console.log("Pasos:");
-  console.log("  1. Ingresá tu DNI y clave.");
-  console.log("  2. Completá el captcha de Cloudflare Turnstile.");
-  console.log("  3. Esperá a ver tu panel (lista de citas).");
+  console.log("  1. Ingresa tu DNI y clave.");
+  console.log("  2. Completa el captcha de Cloudflare Turnstile.");
+  console.log("  3. Espera a ver tu panel (lista de citas).");
   console.log();
   console.log("Voy a capturar tu sesión automáticamente. No cierres esta terminal.");
   console.log("─".repeat(60));
@@ -356,7 +356,7 @@ export async function cmdLogin(opts: LoginOptions = {}): Promise<void> {
       console.error(
         `No se encontró ningún header Authorization: Bearer en requests a ${API_HOST} en el HAR.`
       );
-      console.error("Verificá que el HAR incluya requests autenticados al panel (no solo el login).");
+      console.error("Verifica que el HAR incluya requests autenticados al panel (no solo el login).");
       process.exit(1);
     }
     await saveToken(jwt);
@@ -397,16 +397,16 @@ export async function cmdLogin(opts: LoginOptions = {}): Promise<void> {
   console.error("Opciones para continuar:");
   console.error();
   console.error("  Opción A — pegar el token manualmente:");
-  console.error("    1. Abrí https://miconsulta.essalud.gob.pe en Chrome");
-  console.error("    2. Logueate y abrí DevTools (F12) → Network");
-  console.error("    3. Filtrá por 'api.miconsulta' → hacé click en cualquier request");
-  console.error("    4. En Headers, copiá el valor de: Authorization: Bearer <token>");
-  console.error("    5. Corré:");
+  console.error("    1. Abre https://miconsulta.essalud.gob.pe en Chrome");
+  console.error("    2. Inicia sesión y abre DevTools (F12) → Network");
+  console.error("    3. Filtra por 'api.miconsulta' → haz click en cualquier request");
+  console.error("    4. En Headers, copia el valor de: Authorization: Bearer <token>");
+  console.error("    5. Corre:");
   console.error("         essalud login --token <token>");
   console.error();
   console.error("  Opción B — importar desde HAR:");
   console.error("    1. En DevTools → Network → Export HAR (ícono de descarga)");
-  console.error("    2. Corré:");
+  console.error("    2. Corre:");
   console.error("         essalud login --from-har ~/Downloads/captura.har");
   console.error();
 

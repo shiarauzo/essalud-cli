@@ -34,7 +34,7 @@ export async function readToken(): Promise<string> {
     return raw.trim();
   } catch {
     throw new Error(
-      `No hay token guardado. Guardá tu Bearer token en ${TOKEN_PATH} (chmod 600).`
+      `No hay token guardado. Guarda tu Bearer token en ${TOKEN_PATH} (chmod 600).`
     );
   }
 }
