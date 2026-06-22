@@ -90,7 +90,7 @@ El flujo "Reservar una cita" es guiado: especialidad → actividad → cupo disp
 
 ## Token
 
-El token JWT se guarda en `~/.tramites-pe/essalud/token` (chmod `600`).
+El token JWT se guarda en `~/.essalud/token` (chmod `600`).
 Para obtenerlo: `essalud login`, o manualmente con `essalud login --token <jwt>`.
 
 **El token nunca sale de tu máquina.**

@@ -4,8 +4,12 @@ import { join } from "node:path";
 
 export const BASE_URL = "https://api.miconsulta.essalud.gob.pe/api";
 
-export const TOKEN_PATH = join(homedir(), ".tramites-pe", "essalud", "token");
-export const PACIENTE_PATH = join(homedir(), ".tramites-pe", "essalud", "paciente.json");
+export const TOKEN_PATH = join(homedir(), ".essalud", "token");
+export const PACIENTE_PATH = join(homedir(), ".essalud", "paciente.json");
+
+/** Ubicación antigua del token (antes de renombrar el proyecto a essalud-cli).
+ *  Solo se usa para dar un mensaje de diagnóstico; no se lee como token válido. */
+const LEGACY_TOKEN_PATH = join(homedir(), ".tramites-pe", "essalud", "token");
 
 export interface PacienteData {
   codCentro: string;
@@ -17,7 +21,7 @@ export interface PacienteData {
   celular: string | null;
 }
 
-/** Lee ~/.tramites-pe/essalud/paciente.json. Devuelve null si no existe. */
+/** Lee ~/.essalud/paciente.json. Devuelve null si no existe. */
 export async function getPaciente(): Promise<PacienteData | null> {
   try {
     const raw = await readFile(PACIENTE_PATH, "utf-8");
@@ -27,15 +31,23 @@ export async function getPaciente(): Promise<PacienteData | null> {
   }
 }
 
-/** Lee el token raw desde ~/.tramites-pe/essalud/token */
+/** Lee el token raw desde ~/.essalud/token */
 export async function readToken(): Promise<string> {
   try {
     const raw = await readFile(TOKEN_PATH, "utf-8");
     return raw.trim();
   } catch {
-    throw new Error(
-      `No hay token guardado. Guarda tu Bearer token en ${TOKEN_PATH} (chmod 600).`
-    );
+    // Diagnóstico: si hay un token en la ubicación antigua, explica el cambio.
+    let migracion = "";
+    try {
+      await readFile(LEGACY_TOKEN_PATH, "utf-8");
+      migracion =
+        ` Tu sesión estaba en una ubicación antigua (${LEGACY_TOKEN_PATH}) que ya no se usa;` +
+        ` ahora el token vive en ${TOKEN_PATH}.`;
+    } catch {
+      // No había token viejo: mensaje genérico.
+    }
+    throw new Error(`No hay sesión activa. Corre \`essalud login\` para iniciar sesión.${migracion}`);
   }
 }
 
