@@ -1,4 +1,4 @@
-import { getProgramacionDisponible, type Cupo } from "./api.js";
+import { type Cupo, getProgramacionDisponible } from "./api.js";
 
 function formatCupo(c: Cupo, idx: number): void {
   console.log(`\n  [${idx + 1}] ${c.apeNomProf}`);
@@ -19,7 +19,7 @@ function formatCupo(c: Cupo, idx: number): void {
 export async function cmdFechas(
   codCentro: string,
   codServicioHosp: string,
-  codActSubAct: string
+  codActSubAct: string,
 ): Promise<void> {
   let cupos: Cupo[];
   try {
@@ -36,24 +36,26 @@ export async function cmdFechas(
 
   if (cupos.length === 0) {
     console.log(
-      `Sin programación disponible para centro=${codCentro} servicio=${codServicioHosp} actividad=${codActSubAct}.`
+      `Sin programación disponible para centro=${codCentro} servicio=${codServicioHosp} actividad=${codActSubAct}.`,
     );
     return;
   }
 
   console.log(
-    `Cupos disponibles — centro=${codCentro} servicio=${codServicioHosp} actividad=${codActSubAct} (${cupos.length} turnos)`
+    `Cupos disponibles — centro=${codCentro} servicio=${codServicioHosp} actividad=${codActSubAct} (${cupos.length} turnos)`,
   );
   console.log("─".repeat(60));
   cupos.forEach(formatCupo);
   console.log("");
   console.log("Para reservar, elige un slot y pasa el JSON del cupo:");
   console.log(
-    "  essalud reservar --cupo-json '<json>' --nro-cupo <nro> --hora-slot <hora> --confirm"
+    "  essalud reservar --cupo-json '<json>' --nro-cupo <nro> --hora-slot <hora> --confirm",
   );
   console.log("Ejemplo (primer slot del primer turno):");
-  if (cupos[0] && cupos[0].vCupoDisp[0]) {
+  if (cupos[0]?.vCupoDisp[0]) {
     const ejemplo = { ...cupos[0] };
-    console.log(`  essalud reservar --cupo-json '${JSON.stringify(ejemplo)}' --nro-cupo ${cupos[0].vCupoDisp[0].nroCupo} --hora-slot ${cupos[0].vCupoDisp[0].hora}`);
+    console.log(
+      `  essalud reservar --cupo-json '${JSON.stringify(ejemplo)}' --nro-cupo ${cupos[0].vCupoDisp[0].nroCupo} --hora-slot ${cupos[0].vCupoDisp[0].hora}`,
+    );
   }
 }

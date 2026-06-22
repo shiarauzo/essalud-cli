@@ -1,5 +1,5 @@
 import { createInterface } from "node:readline";
-import { getPerfil, generarCita, type Cupo, type GenerarCitaPayload } from "./api.js";
+import { type Cupo, type GenerarCitaPayload, generarCita, getPerfil } from "./api.js";
 
 export interface ReservarOptions {
   cupoJson?: string;
@@ -68,7 +68,7 @@ export async function cmdReservar(opts: ReservarOptions): Promise<void> {
   for (const field of requiredFields) {
     if (!cupoData[field]) {
       console.error(
-        `Error: falta el campo "${field}". Usa --cupo-json '<json>' o los flags individuales.`
+        `Error: falta el campo "${field}". Usa --cupo-json '<json>' o los flags individuales.`,
       );
       process.exit(1);
     }
@@ -92,7 +92,7 @@ export async function cmdReservar(opts: ReservarOptions): Promise<void> {
 
   if (!numCelular || !email) {
     console.error(
-      "Error: no se encontró celular/email en el perfil. Pásalos con --celular y --email."
+      "Error: no se encontró celular/email en el perfil. Pásalos con --celular y --email.",
     );
     process.exit(1);
   }
@@ -139,7 +139,7 @@ export async function cmdReservar(opts: ReservarOptions): Promise<void> {
 
   // Confirmación interactiva obligatoria
   const ok = await confirmarInteractivo(
-    "ADVERTENCIA: Esto agenda una cita REAL en EsSalud. ¿Confirmas? (ocupa un cupo)"
+    "ADVERTENCIA: Esto agenda una cita REAL en EsSalud. ¿Confirmas? (ocupa un cupo)",
   );
 
   if (!ok) {

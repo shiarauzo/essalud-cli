@@ -18,6 +18,9 @@
     "dev": "tsx src/essalud-bin.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "lint": "biome lint src/",
+    "format": "biome check src/ --write",
+    "check": "biome check src/",
     "prepare": "tsc"
   },
   "keywords": [
@@ -47,6 +50,7 @@
     "playwright": "^1.61.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.0",
     "@types/figlet": "^1.7.0",
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",

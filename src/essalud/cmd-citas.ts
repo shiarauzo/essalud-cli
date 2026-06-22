@@ -1,4 +1,4 @@
-import { getCitasEmitidas, type CitaEmitida } from "./api.js";
+import { type CitaEmitida, getCitasEmitidas } from "./api.js";
 
 function formatCita(c: CitaEmitida, idx: number): void {
   console.log(`\nCita #${idx + 1}`);
