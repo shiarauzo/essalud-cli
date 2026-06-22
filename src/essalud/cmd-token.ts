@@ -1,18 +1,5 @@
 import { readToken, TOKEN_PATH } from "./api.js";
-
-/** Decodifica el payload de un JWT sin verificar la firma. */
-function decodeJwtPayload(token: string): Record<string, unknown> | null {
-  const parts = token.split(".");
-  if (parts.length !== 3) return null;
-  try {
-    // Node 18+ tiene atob o Buffer
-    const padded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const decoded = Buffer.from(padded, "base64").toString("utf-8");
-    return JSON.parse(decoded) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
+import { decodeJwtPayload } from "./jwt.js";
 
 export async function cmdToken(): Promise<void> {
   let token: string;
@@ -61,7 +48,7 @@ export async function cmdToken(): Promise<void> {
     const secsLeft = exp - now;
     if (expired) {
       console.log(`Vence     : ${expiresAt}  (VENCIDO hace ${Math.abs(secsLeft)}s)`);
-      console.log("\nEl token esta vencido. Necesitas obtener uno nuevo.");
+      console.log("\nEl token está vencido. Necesitas obtener uno nuevo.");
     } else {
       const minsLeft = Math.floor(secsLeft / 60);
       const hoursLeft = Math.floor(minsLeft / 60);
