@@ -18,6 +18,8 @@ interface Cita {
   citFecha?: string;
   citHora?: string;
   citEstCita?: string;
+  puedeCancelar?: boolean;
+  citaAnulada?: boolean;
 }
 
 function confirmarInteractivo(mensaje: string): Promise<boolean> {
@@ -53,6 +55,15 @@ export async function cmdCancelar(citActMedNum: string, opts: CancelarOptions): 
   if (!codCentro) {
     console.error(
       "No encontré la cita ni su centro. Pasa el centro con --cod-centro <cod> (es el citCenAsiCod de la cita en `essalud citas`).",
+    );
+    process.exit(1);
+  }
+
+  // Si la encontramos y la API dice que no se puede cancelar (p. ej. ya anulada), paramos.
+  if (cita && cita.puedeCancelar === false) {
+    const motivo = cita.citaAnulada ? "ya está anulada" : "no se puede cancelar";
+    console.error(
+      `Esta cita ${motivo} (estado: ${cita.citEstCita ?? "?"}). No hay nada que cancelar.`,
     );
     process.exit(1);
   }

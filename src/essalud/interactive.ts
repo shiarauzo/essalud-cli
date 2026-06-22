@@ -457,12 +457,14 @@ async function runCancelar(ts: TokenStatus): Promise<void> {
     return;
   }
 
-  if (citas.length === 0) {
-    p.log.info("No tienes citas para cancelar.");
+  // Solo ofrecemos las que la API marca como cancelables (deja fuera las anuladas).
+  const cancelables = citas.filter((c) => c.puedeCancelar === true);
+  if (cancelables.length === 0) {
+    p.log.info("No tienes citas que se puedan cancelar (las anuladas no cuentan).");
     return;
   }
 
-  const opts = citas.map((c) => {
+  const opts = cancelables.map((c) => {
     const id = c.citActMedNum ?? c.citAutoGenCod ?? "?";
     const fecha = c.citFecha ?? "—";
     const hora = c.citHora ?? "—";
