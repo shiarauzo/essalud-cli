@@ -1,7 +1,7 @@
-import { readFile, writeFile, mkdir, chmod } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { chromium, type Browser } from "playwright";
-import { TOKEN_PATH, PACIENTE_PATH, getPerfil, type Perfil, type PacienteData } from "./api.js";
+import { type Browser, chromium } from "playwright";
+import { getPerfil, PACIENTE_PATH, type PacienteData, type Perfil, TOKEN_PATH } from "./api.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -34,10 +34,9 @@ const JWT_RE = /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}
 function looksLikeEsSaludJwt(jwt: string): boolean {
   try {
     const part = jwt.split(".")[1] ?? "";
-    const json = Buffer.from(
-      part.replace(/-/g, "+").replace(/_/g, "/"),
-      "base64"
-    ).toString("utf-8");
+    const json = Buffer.from(part.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString(
+      "utf-8",
+    );
     const payload = JSON.parse(json) as { exp?: number; scope?: unknown };
     return typeof payload.exp === "number" || payload.scope != null;
   } catch {
@@ -215,7 +214,7 @@ async function loginWithBrowser(): Promise<{ jwt: string; paciente: PacienteData
   // Capturar el Bearer de cualquier request autenticado a la API.
   context.on("request", (req) => {
     if (jwt || !req.url().includes(API_HOST)) return;
-    const auth = req.headers()["authorization"] ?? "";
+    const auth = req.headers().authorization ?? "";
     const m = auth.match(/Bearer\s+(\S+)/i);
     if (m && looksLikeEsSaludJwt(m[1])) jwt = m[1];
   });
@@ -273,14 +272,14 @@ async function loginWithBrowser(): Promise<{ jwt: string; paciente: PacienteData
 
 async function saveToken(jwt: string): Promise<void> {
   await mkdir(dirname(TOKEN_PATH), { recursive: true });
-  await writeFile(TOKEN_PATH, jwt + "\n", { encoding: "utf-8", mode: 0o600 });
+  await writeFile(TOKEN_PATH, `${jwt}\n`, { encoding: "utf-8", mode: 0o600 });
   // writeFile mode puede quedar enmascarado por el umask — forzamos los permisos.
   await chmod(TOKEN_PATH, 0o600);
 }
 
 async function savePaciente(paciente: PacienteData): Promise<void> {
   await mkdir(dirname(PACIENTE_PATH), { recursive: true });
-  await writeFile(PACIENTE_PATH, JSON.stringify(paciente, null, 2) + "\n", {
+  await writeFile(PACIENTE_PATH, `${JSON.stringify(paciente, null, 2)}\n`, {
     encoding: "utf-8",
     mode: 0o600,
   });
@@ -306,11 +305,7 @@ async function validateAndPrint(jwt: string): Promise<void> {
     throw new Error(`Token guardado pero /perfil falló: ${String(err)}`);
   }
 
-  const nombre = [
-    perfil.nombreAsegurado,
-    perfil.apellidoPatAsegurado,
-    perfil.apellidoMatAsegurado,
-  ]
+  const nombre = [perfil.nombreAsegurado, perfil.apellidoPatAsegurado, perfil.apellidoMatAsegurado]
     .filter(Boolean)
     .join(" ");
 
@@ -354,9 +349,11 @@ export async function cmdLogin(opts: LoginOptions = {}): Promise<void> {
     const jwt = extractTokenFromHar(opts.fromHar, content);
     if (!jwt) {
       console.error(
-        `No se encontró ningún header Authorization: Bearer en requests a ${API_HOST} en el HAR.`
+        `No se encontró ningún header Authorization: Bearer en requests a ${API_HOST} en el HAR.`,
       );
-      console.error("Verifica que el HAR incluya requests autenticados al panel (no solo el login).");
+      console.error(
+        "Verifica que el HAR incluya requests autenticados al panel (no solo el login).",
+      );
       process.exit(1);
     }
     await saveToken(jwt);
@@ -392,7 +389,9 @@ export async function cmdLogin(opts: LoginOptions = {}): Promise<void> {
   // Falló la captura automática → ofrecer los caminos manuales.
   console.error();
   console.error("No se pudo capturar el token automáticamente.");
-  console.error("Posibles causas: no completaste el login, Turnstile bloqueó, o cerraste el navegador.");
+  console.error(
+    "Posibles causas: no completaste el login, Turnstile bloqueó, o cerraste el navegador.",
+  );
   console.error();
   console.error("Opciones para continuar:");
   console.error();

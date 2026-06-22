@@ -1,12 +1,12 @@
 import { Command } from "commander";
-import { cmdPerfil } from "./cmd-perfil.js";
+import { type CancelarOptions, cmdCancelar } from "./cmd-cancelar.js";
 import { cmdCitas } from "./cmd-citas.js";
-import { cmdToken } from "./cmd-token.js";
-import { cmdLogin, type LoginOptions } from "./cmd-login.js";
 import { cmdEspecialidades } from "./cmd-especialidades.js";
 import { cmdFechas } from "./cmd-fechas.js";
+import { cmdLogin, type LoginOptions } from "./cmd-login.js";
+import { cmdPerfil } from "./cmd-perfil.js";
 import { cmdReservar, type ReservarOptions } from "./cmd-reservar.js";
-import { cmdCancelar, type CancelarOptions } from "./cmd-cancelar.js";
+import { cmdToken } from "./cmd-token.js";
 import { runInteractiveMode } from "./interactive.js";
 
 export function makeEssaludCommand(): Command {
@@ -17,15 +17,9 @@ export function makeEssaludCommand(): Command {
       void runInteractiveMode();
     });
 
-  essalud
-    .command("perfil")
-    .description("Muestra los datos del asegurado")
-    .action(cmdPerfil);
+  essalud.command("perfil").description("Muestra los datos del asegurado").action(cmdPerfil);
 
-  essalud
-    .command("citas")
-    .description("Lista las citas emitidas")
-    .action(cmdCitas);
+  essalud.command("citas").description("Lista las citas emitidas").action(cmdCitas);
 
   essalud
     .command("token")
@@ -35,7 +29,7 @@ export function makeEssaludCommand(): Command {
   essalud
     .command("login")
     .description(
-      "Login asistido: abre browser headed, captura el Bearer token de EsSalud y lo guarda."
+      "Login asistido: abre browser headed, captura el Bearer token de EsSalud y lo guarda.",
     )
     .option("--token <jwt>", "Pegar el JWT directamente (sin abrir browser)")
     .option("--from-har <path>", "Importar token desde un HAR exportado de DevTools")
@@ -50,23 +44,23 @@ export function makeEssaludCommand(): Command {
   essalud
     .command("especialidades <codCentro>")
     .description(
-      "Lista especialidades y actividades disponibles para un centro (POST /parametroSolicitud)."
+      "Lista especialidades y actividades disponibles para un centro (POST /parametroSolicitud).",
     )
     .action((codCentro: string) => cmdEspecialidades(codCentro));
 
   essalud
     .command("fechas <codCentro> <codServicioHosp> <codActSubAct>")
     .description(
-      "Muestra cupos y slots disponibles para una especialidad/actividad (POST /programacionDisponible)."
+      "Muestra cupos y slots disponibles para una especialidad/actividad (POST /programacionDisponible).",
     )
     .action((codCentro: string, codServicioHosp: string, codActSubAct: string) =>
-      cmdFechas(codCentro, codServicioHosp, codActSubAct)
+      cmdFechas(codCentro, codServicioHosp, codActSubAct),
     );
 
   essalud
     .command("reservar")
     .description(
-      "Reserva una cita. Dry-run por defecto. Requiere --confirm para el POST real a /generarCita."
+      "Reserva una cita. Dry-run por defecto. Requiere --confirm para el POST real a /generarCita.",
     )
     .option("--cupo-json <json>", "JSON del cupo completo (de la salida de 'fechas')")
     .option("--nro-cupo <nro>", "Número de cupo a reservar (de vCupoDisp[].nroCupo)")
@@ -107,14 +101,14 @@ export function makeEssaludCommand(): Command {
           confirm: opts.confirm ?? false,
         };
         return cmdReservar(reservarOpts);
-      }
+      },
     );
 
   essalud
     .command("cancelar <citActMedNum>")
     .description(
       "Cancela una cita (POST /cancelarCita). Dry-run por defecto. " +
-        "ADVERTENCIA: payload no validado en HAR — puede necesitar ajuste."
+        "ADVERTENCIA: payload no validado en HAR — puede necesitar ajuste.",
     )
     .option("--confirm", "Ejecutar la cancelación real (requiere confirmación interactiva)")
     .action((citActMedNum: string, opts: { confirm?: boolean }) => {

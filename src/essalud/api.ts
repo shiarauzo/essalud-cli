@@ -47,7 +47,9 @@ export async function readToken(): Promise<string> {
     } catch {
       // No había token viejo: mensaje genérico.
     }
-    throw new Error(`No hay sesión activa. Corre \`essalud login\` para iniciar sesión.${migracion}`);
+    throw new Error(
+      `No hay sesión activa. Corre \`essalud login\` para iniciar sesión.${migracion}`,
+    );
   }
 }
 
@@ -63,11 +65,7 @@ export interface EsSaludResponse<T> {
  *  - Si la respuesta tiene envoltorio {codError, desError, vDataItem}: lo desenvuelve.
  *    codError "0" = OK; otro valor lanza error con desError.
  *  - Si la respuesta NO tiene envoltorio (p.ej. /perfil): devuelve el JSON directo. */
-export async function request<T>(
-  method: "GET" | "POST",
-  path: string,
-  body?: unknown
-): Promise<T> {
+export async function request<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
   const token = await readToken();
 
   const headers: Record<string, string> = {
@@ -105,7 +103,7 @@ export async function request<T>(
 export class EsSaludApiError extends Error {
   constructor(
     public readonly codError: string,
-    public readonly desError: string
+    public readonly desError: string,
   ) {
     super(`EsSalud [${codError}]: ${desError}`);
     this.name = "EsSaludApiError";
@@ -240,9 +238,7 @@ export interface ProgramacionPayload {
 
 /** POST /programacionDisponible — cupos disponibles.
  *  codError "1" = sin programación disponible (no es error, devuelve []). */
-export async function getProgramacionDisponible(
-  payload: ProgramacionPayload
-): Promise<Cupo[]> {
+export async function getProgramacionDisponible(payload: ProgramacionPayload): Promise<Cupo[]> {
   try {
     const result = await request<Cupo[] | null>("POST", "programacionDisponible", payload);
     return Array.isArray(result) ? result : [];

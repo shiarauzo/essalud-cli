@@ -1,5 +1,5 @@
 import { createInterface } from "node:readline";
-import { request, EsSaludApiError } from "./api.js";
+import { EsSaludApiError, request } from "./api.js";
 
 // Endpoint de cancelación CONFIRMADO del HAR (2026-06-20):
 //   POST /eliminarCita  { oriCenAsis: "1", numCitaCreada, codCentro }
@@ -43,10 +43,7 @@ async function buscarCita(citActMedNum: string): Promise<Cita | undefined> {
   return undefined;
 }
 
-export async function cmdCancelar(
-  citActMedNum: string,
-  opts: CancelarOptions
-): Promise<void> {
+export async function cmdCancelar(citActMedNum: string, opts: CancelarOptions): Promise<void> {
   console.log(`Cancelar cita: ${citActMedNum}`);
   console.log("─".repeat(50));
 
@@ -55,18 +52,18 @@ export async function cmdCancelar(
 
   if (!codCentro) {
     console.error(
-      "No encontré la cita ni su centro. Pasa el centro con --cod-centro <cod> (es el citCenAsiCod de la cita en `essalud citas`)."
+      "No encontré la cita ni su centro. Pasa el centro con --cod-centro <cod> (es el citCenAsiCod de la cita en `essalud citas`).",
     );
     process.exit(1);
   }
 
   if (cita) {
     console.log(
-      `${cita.citEstCita ?? ""}  ${cita.citFecha ?? ""} ${cita.citHora ?? ""}  ·  ${cita.citCenAsiDes ?? codCentro}`.trim()
+      `${cita.citEstCita ?? ""}  ${cita.citFecha ?? ""} ${cita.citHora ?? ""}  ·  ${cita.citCenAsiDes ?? codCentro}`.trim(),
     );
   }
   console.log(
-    `Endpoint: POST /eliminarCita { oriCenAsis:"1", numCitaCreada:"${citActMedNum}", codCentro:"${codCentro}" }`
+    `Endpoint: POST /eliminarCita { oriCenAsis:"1", numCitaCreada:"${citActMedNum}", codCentro:"${codCentro}" }`,
   );
   console.log("");
 
@@ -77,7 +74,7 @@ export async function cmdCancelar(
   }
 
   const ok = await confirmarInteractivo(
-    `Esto CANCELA la cita ${citActMedNum} de verdad. ¿Confirmas?`
+    `Esto CANCELA la cita ${citActMedNum} de verdad. ¿Confirmas?`,
   );
   if (!ok) {
     console.log("Cancelado. No se realizó ninguna operación.");

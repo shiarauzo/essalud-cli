@@ -1,4 +1,4 @@
-import { getPerfil, getPaciente, type Perfil } from "./api.js";
+import { getPaciente, getPerfil, type Perfil } from "./api.js";
 
 function printField(label: string, value: unknown): void {
   if (value === null || value === undefined || value === "") return;

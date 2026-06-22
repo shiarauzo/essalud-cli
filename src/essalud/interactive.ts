@@ -2,25 +2,26 @@
  * Modo interactivo de EsSalud — menú estilo command palette usando @clack/prompts.
  * Se lanza cuando se corre `essalud` sin subcomando.
  */
+
+import { readFile } from "node:fs/promises";
 import * as p from "@clack/prompts";
 import boxen from "boxen";
-import pc from "picocolors";
 import figlet from "figlet";
-import { readFile } from "node:fs/promises";
+import pc from "picocolors";
 import {
-  TOKEN_PATH,
-  getPerfil,
-  getPaciente,
-  getCitasEmitidas,
-  getParametroSolicitud,
-  getProgramacionDisponible,
-  generarCita,
-  type Perfil,
-  type CitaEmitida,
-  type ServicioHosp,
   type ActSubAct,
+  type CitaEmitida,
   type Cupo,
   type CupoSlot,
+  generarCita,
+  getCitasEmitidas,
+  getPaciente,
+  getParametroSolicitud,
+  getPerfil,
+  getProgramacionDisponible,
+  type Perfil,
+  type ServicioHosp,
+  TOKEN_PATH,
 } from "./api.js";
 import { cmdLogin } from "./cmd-login.js";
 
@@ -50,7 +51,7 @@ async function getTokenStatus(): Promise<TokenStatus> {
     try {
       const b64 = (parts[1] ?? "").replace(/-/g, "+").replace(/_/g, "/");
       const payload = JSON.parse(
-        Buffer.from(b64 + "=".repeat((4 - (b64.length % 4)) % 4), "base64").toString("utf-8")
+        Buffer.from(b64 + "=".repeat((4 - (b64.length % 4)) % 4), "base64").toString("utf-8"),
       ) as { exp?: number };
       if (typeof payload.exp === "number") {
         const expiresAt = new Date(payload.exp * 1000);
@@ -66,7 +67,7 @@ async function getTokenStatus(): Promise<TokenStatus> {
   }
 }
 
-function formatExpiry(ts: TokenStatus): string {
+function _formatExpiry(ts: TokenStatus): string {
   if (!ts.valid || !ts.token) return "no logueado";
   if (ts.expired) return "token vencido — haz login nuevamente";
   if (ts.expiresAt) {
@@ -112,7 +113,7 @@ async function printBanner(ts: TokenStatus): Promise<void> {
       if (parts.length === 3) {
         const b64 = (parts[1] ?? "").replace(/-/g, "+").replace(/_/g, "/");
         const payload = JSON.parse(
-          Buffer.from(b64 + "=".repeat((4 - (b64.length % 4)) % 4), "base64").toString("utf-8")
+          Buffer.from(b64 + "=".repeat((4 - (b64.length % 4)) % 4), "base64").toString("utf-8"),
         ) as { sub?: string; username?: string; preferred_username?: string };
         const dni = payload.sub ?? payload.username ?? payload.preferred_username ?? "";
         if (dni) dniStr = ` · DNI ${dni}`;
@@ -148,7 +149,7 @@ async function printBanner(ts: TokenStatus): Promise<void> {
       borderStyle: "round",
       borderColor: "#E8845A",
       textAlignment: "center",
-    })
+    }),
   );
 }
 
@@ -161,7 +162,7 @@ async function requireLogin(ts: TokenStatus): Promise<boolean> {
   p.log.warn(
     ts.expired
       ? "Tu token venció. Necesitas hacer login nuevamente."
-      : "No hay sesión activa. Primero haz login."
+      : "No hay sesión activa. Primero haz login.",
   );
   const ir = await p.confirm({ message: "¿Quieres hacer login ahora?" });
   if (p.isCancel(ir) || !ir) return false;
@@ -198,7 +199,11 @@ async function runPerfil(ts: TokenStatus): Promise<void> {
 
 function printPerfil(perfil: Perfil, paciente: Awaited<ReturnType<typeof getPaciente>>): void {
   // /perfil trae nombre separado; enricher con paciente.json si hay
-  const nombreApi = [perfil.apellidoPatAsegurado, perfil.apellidoMatAsegurado, perfil.nombreAsegurado]
+  const nombreApi = [
+    perfil.apellidoPatAsegurado,
+    perfil.apellidoMatAsegurado,
+    perfil.nombreAsegurado,
+  ]
     .filter(Boolean)
     .join(" ");
   const nombrePaciente = paciente
@@ -217,7 +222,7 @@ function printPerfil(perfil: Perfil, paciente: Awaited<ReturnType<typeof getPaci
       `Celular  : ${contacto?.nroCelular ?? paciente?.celular ?? "—"}`,
       `Email    : ${contacto?.email ?? paciente?.email ?? "—"}`,
     ].join("\n"),
-    "Mi perfil"
+    "Mi perfil",
   );
 }
 
@@ -398,7 +403,7 @@ async function runReservar(ts: TokenStatus): Promise<void> {
       `Consultorio : ${elegido.cupo.consultorio}`,
       `Especialidad: ${servicioElegido.desServicioHosp}`,
     ].join("\n"),
-    "Resumen de la cita"
+    "Resumen de la cita",
   );
 
   const confirma = await p.confirm({
@@ -449,7 +454,7 @@ async function runReservar(ts: TokenStatus): Promise<void> {
           `Profesional : ${cita.apeNomProf ?? elegido.cupo.apeNomProf}`,
           `Especialidad: ${cita.desServHosp ?? servicioElegido.desServicioHosp}`,
         ].join("\n"),
-        "Cita confirmada"
+        "Cita confirmada",
       );
     }
   } catch (err) {
@@ -510,10 +515,8 @@ async function runCancelar(ts: TokenStatus): Promise<void> {
   }
 
   // Necesitamos codCentro para eliminarCita; lo tomamos del campo de la cita si existe
-  const citaObj = citas.find(
-    (c) => c.citActMedNum === citaId || c.citAutoGenCod === citaId
-  );
-  const codCentro = (citaObj?.["citCenAsiCod"] as string | undefined) ?? "021";
+  const citaObj = citas.find((c) => c.citActMedNum === citaId || c.citAutoGenCod === citaId);
+  const codCentro = (citaObj?.citCenAsiCod as string | undefined) ?? "021";
 
   const s2 = p.spinner();
   s2.start("Cancelando cita...");
