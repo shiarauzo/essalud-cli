@@ -20,10 +20,12 @@ import {
   getPerfil,
   getProgramacionDisponible,
   type Perfil,
+  request,
   type ServicioHosp,
   TOKEN_PATH,
 } from "./api.js";
 import { cmdLogin } from "./cmd-login.js";
+import { decodeJwtPayload } from "./jwt.js";
 
 // ---------------------------------------------------------------------------
 // Token helpers
@@ -43,37 +45,17 @@ async function getTokenStatus(): Promise<TokenStatus> {
     if (!token.startsWith("ey")) {
       return { valid: false, expired: false, expiresAt: null, token: null };
     }
-    // Decode exp
-    const parts = token.split(".");
-    if (parts.length !== 3) {
-      return { valid: true, expired: false, expiresAt: null, token };
+    const payload = decodeJwtPayload(token);
+    if (payload && typeof payload.exp === "number") {
+      const expiresAt = new Date(payload.exp * 1000);
+      const expired = Date.now() > payload.exp * 1000;
+      return { valid: true, expired, expiresAt, token };
     }
-    try {
-      const b64 = (parts[1] ?? "").replace(/-/g, "+").replace(/_/g, "/");
-      const payload = JSON.parse(
-        Buffer.from(b64 + "=".repeat((4 - (b64.length % 4)) % 4), "base64").toString("utf-8"),
-      ) as { exp?: number };
-      if (typeof payload.exp === "number") {
-        const expiresAt = new Date(payload.exp * 1000);
-        const expired = Date.now() > payload.exp * 1000;
-        return { valid: true, expired, expiresAt, token };
-      }
-    } catch {
-      // non-standard JWT, treat as valid with no exp info
-    }
+    // JWT sin exp legible: lo tratamos como válido sin info de expiración.
     return { valid: true, expired: false, expiresAt: null, token };
   } catch {
     return { valid: false, expired: false, expiresAt: null, token: null };
   }
-}
-
-function _formatExpiry(ts: TokenStatus): string {
-  if (!ts.valid || !ts.token) return "no logueado";
-  if (ts.expired) return "token vencido — haz login nuevamente";
-  if (ts.expiresAt) {
-    return `logueado · expira ${ts.expiresAt.toLocaleString("es-PE", { timeZone: "America/Lima" })}`;
-  }
-  return "logueado";
 }
 
 // ---------------------------------------------------------------------------
@@ -107,20 +89,13 @@ async function printBanner(ts: TokenStatus): Promise<void> {
     estadoLine = pc.red("VENCIDO — corre login");
   } else {
     // Extraer DNI del JWT (sub) o mostrar genérico
-    let dniStr = "";
-    try {
-      const parts = (ts.token ?? "").split(".");
-      if (parts.length === 3) {
-        const b64 = (parts[1] ?? "").replace(/-/g, "+").replace(/_/g, "/");
-        const payload = JSON.parse(
-          Buffer.from(b64 + "=".repeat((4 - (b64.length % 4)) % 4), "base64").toString("utf-8"),
-        ) as { sub?: string; username?: string; preferred_username?: string };
-        const dni = payload.sub ?? payload.username ?? payload.preferred_username ?? "";
-        if (dni) dniStr = ` · DNI ${dni}`;
-      }
-    } catch {
-      // ignore
-    }
+    const payload = decodeJwtPayload(ts.token ?? "");
+    const dni =
+      (typeof payload?.sub === "string" && payload.sub) ||
+      (typeof payload?.username === "string" && payload.username) ||
+      (typeof payload?.preferred_username === "string" && payload.preferred_username) ||
+      "";
+    const dniStr = dni ? ` · DNI ${dni}` : "";
     const venceStr = ts.expiresAt
       ? ` · vence ${ts.expiresAt.toLocaleString("es-PE", { timeZone: "America/Lima", dateStyle: "short", timeStyle: "short" })}`
       : "";
@@ -514,15 +489,20 @@ async function runCancelar(ts: TokenStatus): Promise<void> {
     return;
   }
 
-  // Necesitamos codCentro para eliminarCita; lo tomamos del campo de la cita si existe
+  // Necesitamos el centro de la cita para cancelarla. Si no viene, abortamos:
+  // adivinarlo podría cancelar contra el centro equivocado (operación irreversible).
   const citaObj = citas.find((c) => c.citActMedNum === citaId || c.citAutoGenCod === citaId);
-  const codCentro = (citaObj?.citCenAsiCod as string | undefined) ?? "021";
+  const codCentro = citaObj?.citCenAsiCod;
+  if (!codCentro) {
+    p.log.error(
+      "No pude determinar el centro de esa cita; no la cancelo para no afectar la equivocada.",
+    );
+    return;
+  }
 
   const s2 = p.spinner();
   s2.start("Cancelando cita...");
   try {
-    // Importar request directamente para no reexportar eliminarCita en api.ts si no existe
-    const { request } = await import("./api.js");
     await request("POST", "eliminarCita", {
       oriCenAsis: "1",
       numCitaCreada: citaId as string,

@@ -39,7 +39,7 @@ export async function cmdCitas(): Promise<void> {
   }
 
   if (citas.length === 0) {
-    console.log("No tenes citas registradas.");
+    console.log("No tienes citas registradas.");
     return;
   }
 

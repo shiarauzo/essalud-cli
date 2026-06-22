@@ -143,6 +143,8 @@ export interface CitaEmitida {
   citFecha?: string;
   citHora?: string;
   citCenAsiDes?: string;
+  /** Código del centro de la cita; necesario para cancelarla (POST eliminarCita). */
+  citCenAsiCod?: string;
   [key: string]: unknown;
 }
 
