@@ -14,7 +14,7 @@ CLI **no oficial** para reservar y cancelar citas de EsSalud desde la terminal.
   ```bash
   npx playwright install chromium
   ```
-  Si no lo instalás, el login asistido te avisa; igual podés loguearte con `--token` o `--from-har`.
+  Si no lo instalas, el login asistido te avisa; igual puedes iniciar sesión con `--token` o `--from-har`.
 
 ## Instalación
 
@@ -35,14 +35,14 @@ essalud citas
 
 `essalud login` **abre un navegador nuevo y aislado** (perfil limpio, no toca tu Chrome):
 
-1. Ingresás tu DNI y clave en el navegador.
-2. Completás el captcha de Cloudflare Turnstile.
-3. Esperás a ver tu panel (lista de citas).
+1. Ingresas tu DNI y clave en el navegador.
+2. Completas el captcha de Cloudflare Turnstile.
+3. Esperas a ver tu panel (lista de citas).
 
 El CLI captura el token automáticamente desde la red, lo valida contra `/perfil` y lo
 guarda. La sesión del navegador es efímera: se descarta al terminar.
 
-¿No querés/podés usar el navegador asistido? Hay dos caminos manuales:
+¿No quieres/puedes usar el navegador asistido? Hay dos caminos manuales:
 
 ```bash
 # A) pegar el token a mano (Authorization: Bearer <jwt> desde DevTools → Network)
@@ -135,7 +135,7 @@ src/
 
 ## Licencia
 
-[PolyForm Noncommercial 1.0.0](./LICENSE). El código está a la vista y podés usarlo,
+[PolyForm Noncommercial 1.0.0](./LICENSE). El código está a la vista y puedes usarlo,
 modificarlo y compartirlo **para fines no comerciales** (personal, educativo, ONG).
 Cualquier **uso comercial** requiere permiso de la autora. No es una licencia OSI
 "open source" en sentido estricto, sino *source-available* / no comercial.

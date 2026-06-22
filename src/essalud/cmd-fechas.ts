@@ -47,7 +47,7 @@ export async function cmdFechas(
   console.log("─".repeat(60));
   cupos.forEach(formatCupo);
   console.log("");
-  console.log("Para reservar, elegí un slot y pasá el JSON del cupo:");
+  console.log("Para reservar, elige un slot y pasa el JSON del cupo:");
   console.log(
     "  essalud reservar --cupo-json '<json>' --nro-cupo <nro> --hora-slot <hora> --confirm"
   );
