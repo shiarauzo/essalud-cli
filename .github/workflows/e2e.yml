@@ -1,0 +1,56 @@
+name: E2E (manual)
+
+# Pruebas end-to-end contra la API REAL de EsSalud. Reservan y cancelan una cita
+# real (auto-limpiante). NO corren en PRs: solo manual o agendado, y con secretos.
+#
+# Secretos requeridos en el repo:
+#   ESSALUD_TOKEN          Bearer token vigente (lo da `essalud login`).
+#   ESSALUD_PACIENTE_JSON  (opcional) contenido de ~/.essalud/paciente.json, para
+#                          tener el codCentro del flujo de reserva.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Lunes 12:00 UTC (07:00 Perú). Cambia o quita si no quieres corridas automáticas.
+    - cron: "0 12 * * 1"
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.ESSALUD_E2E_SCHEDULE == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Preparar sesión desde secretos
+        env:
+          ESSALUD_TOKEN: ${{ secrets.ESSALUD_TOKEN }}
+          ESSALUD_PACIENTE_JSON: ${{ secrets.ESSALUD_PACIENTE_JSON }}
+        run: |
+          if [ -z "$ESSALUD_TOKEN" ]; then
+            echo "Falta el secreto ESSALUD_TOKEN" >&2
+            exit 1
+          fi
+          mkdir -p "$HOME/.essalud"
+          printf '%s\n' "$ESSALUD_TOKEN" > "$HOME/.essalud/token"
+          chmod 600 "$HOME/.essalud/token"
+          if [ -n "$ESSALUD_PACIENTE_JSON" ]; then
+            printf '%s' "$ESSALUD_PACIENTE_JSON" > "$HOME/.essalud/paciente.json"
+            chmod 600 "$HOME/.essalud/paciente.json"
+          fi
+
+      - name: Correr E2E (auto-limpiante)
+        env:
+          ESSALUD_E2E: "1"
+        run: pnpm test
