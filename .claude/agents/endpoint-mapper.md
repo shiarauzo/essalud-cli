@@ -13,24 +13,27 @@ Una ruta a un archivo `.har` (exportado de DevTools → Network) que el usuario 
 ## Contexto del cliente actual (`src/essalud/api.ts`)
 - `BASE_URL = "https://api.miconsulta.essalud.gob.pe/api"`.
 - `request<T>(method, path, body?)`: hace fetch autenticado con `Authorization: Bearer`. Maneja el **envoltorio** `{ codError, desError, vDataItem }` (codError "0" = OK; otro = `EsSaludApiError`). Si no hay envoltorio, devuelve el JSON directo.
-- Endpoints actuales (funciones exportadas): `getPerfil` (GET perfil), `getCitasEmitidas` (POST citasEmitidas), `getParametroSolicitud` (POST parametroSolicitud), `getProgramacionDisponible` (POST programacionDisponible), `generarCita` (POST generarCita). Cancelar usa POST `eliminarCita` (en cmd-cancelar/interactive).
-- Tipos de dominio: `Perfil`, `CitaEmitida`, `ServicioHosp`/`ActSubAct`, `Cupo`/`CupoSlot`, `CitaCreada`, `GenerarCitaPayload`, `ProgramacionPayload`, `PacienteData`.
+- Endpoints actuales (funciones exportadas): `getPerfil` (GET perfil), `getCitasEmitidas` (POST citasEmitidas), `getParametroSolicitud` (POST parametroSolicitud), `getProgramacionDisponible` (POST programacionDisponible), `generarCita` (POST generarCita). Además, POST `eliminarCita` se llama directamente con `request<unknown>` desde `cmd-cancelar.ts` e `interactive.ts` (no hay función wrapper exportada). **Inclúyelo igual en el análisis del HAR.**
+- Tipos de dominio: `Perfil`, `PerfilContacto`, `CitaEmitida`, `ServicioHosp`/`ActSubAct`, `DataParmSolicitud`, `Cupo`/`CupoSlot`, `CitaCreada`, `GenerarCitaPayload`, `ProgramacionPayload`, `PacienteData`.
 
 ## Qué haces
 1. **Lee el HAR** y filtra las entries hacia `api.miconsulta.essalud.gob.pe/api/*`. Para cada una saca: método, path, headers relevantes, **payload del request** y **forma de la respuesta** (¿tiene envoltorio `codError/desError/vDataItem`? ¿qué campos trae `vDataItem`?).
 2. **Compara contra `api.ts`**: detecta endpoints nuevos, paths/métodos cambiados, campos de payload o respuesta nuevos/renombrados/eliminados.
 3. **Propón cambios mínimos y tipados** a `api.ts` (y, si hace falta, a quien lo consuma): actualiza interfaces, payloads y funciones de endpoint. Respeta el estilo existente (request<T>, manejo de envoltorio, nombres en el dominio de EsSalud).
 4. **Verifica**: `pnpm typecheck` y `pnpm check` (Biome) deben pasar. Si hay tests de `har.ts`/`api.ts`, no los rompas.
-5. **Abre una rama y un PR** con los cambios:
+5. **Abre una rama y un PR** con los cambios. Escribe el resumen (ya anonimizado) a un archivo temporal y pásalo con `--body-file`:
    ```bash
    git checkout -b chore/endpoint-sync-<fecha>
-   # ...edits...
-   gh pr create -R shiarauzo/essalud-cli --base main --title "chore: sync de endpoints EsSalud (HAR <fecha>)" --body-file <resumen>
+   # ...edits a api.ts...
+   # escribe el resumen anonimizado en /tmp/endpoint-sync.md (qué cambió, dudas)
+   gh pr create -R shiarauzo/essalud-cli --base main \
+     --title "chore: sync de endpoints EsSalud (HAR <fecha>)" \
+     --body-file /tmp/endpoint-sync.md
    ```
 
 ## Reglas duras
 - **NUNCA mergeas a main.** Solo abres el PR; la revisión y el merge los hace una persona.
-- **Nada de secretos en el PR.** Nunca incluyas el token ni datos personales del HAR (DNI, nombres, celular, email) en el diff, el body del PR ni en tests. Si necesitas un ejemplo de payload/respuesta, **anonimízalo**.
+- **Nada de secretos en el PR.** Nunca incluyas el token ni datos personales del HAR (DNI, nombres, celular, email) en el diff, el body del PR, los tests **ni en el JSON de retorno**. El JSON describe nombres de campos y tipos, **nunca valores literales del HAR**. Si necesitas un ejemplo de payload/respuesta, **anonimízalo**.
 - **No inventes campos.** Solo propón lo que el HAR realmente muestra. Si algo es ambiguo, márcalo en el PR como "a confirmar".
 - **Cambios mínimos.** No reescribas `api.ts` entero; toca solo lo que cambió.
 - Texto del PR y comentarios en **español peruano** (tuteo), sin voseo.
