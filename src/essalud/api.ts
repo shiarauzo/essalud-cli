@@ -4,8 +4,8 @@ import { join } from "node:path";
 
 export const BASE_URL = "https://api.miconsulta.essalud.gob.pe/api";
 
-export const TOKEN_PATH = join(homedir(), ".tramites-pe", "essalud", "token");
-export const PACIENTE_PATH = join(homedir(), ".tramites-pe", "essalud", "paciente.json");
+export const TOKEN_PATH = join(homedir(), ".essalud", "token");
+export const PACIENTE_PATH = join(homedir(), ".essalud", "paciente.json");
 
 export interface PacienteData {
   codCentro: string;
@@ -17,7 +17,7 @@ export interface PacienteData {
   celular: string | null;
 }
 
-/** Lee ~/.tramites-pe/essalud/paciente.json. Devuelve null si no existe. */
+/** Lee ~/.essalud/paciente.json. Devuelve null si no existe. */
 export async function getPaciente(): Promise<PacienteData | null> {
   try {
     const raw = await readFile(PACIENTE_PATH, "utf-8");
@@ -27,7 +27,7 @@ export async function getPaciente(): Promise<PacienteData | null> {
   }
 }
 
-/** Lee el token raw desde ~/.tramites-pe/essalud/token */
+/** Lee el token raw desde ~/.essalud/token */
 export async function readToken(): Promise<string> {
   try {
     const raw = await readFile(TOKEN_PATH, "utf-8");
