@@ -450,7 +450,6 @@ async function runCancelar(ts: TokenStatus): Promise<void> {
   let citas: CitaEmitida[] = [];
   try {
     citas = await getCitasEmitidas();
-    s.stop(`${citas.length} cita(s) encontrada(s).`);
   } catch (err) {
     s.stop("Error al cargar las citas.");
     p.log.error(String(err));
@@ -459,8 +458,10 @@ async function runCancelar(ts: TokenStatus): Promise<void> {
 
   // Solo ofrecemos las que la API marca como cancelables (deja fuera las anuladas).
   const cancelables = citas.filter((c) => c.puedeCancelar === true);
+  s.stop(`${citas.length} cita(s); ${cancelables.length} cancelable(s).`);
+
   if (cancelables.length === 0) {
-    p.log.info("No tienes citas que se puedan cancelar (las anuladas no cuentan).");
+    p.log.info("No hay citas que puedas cancelar (las anuladas no cuentan).");
     return;
   }
 
