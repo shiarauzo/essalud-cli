@@ -20,6 +20,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "vitest run src/essalud/e2e.test.ts",
     "lint": "biome lint src/",
     "format": "biome check src/ --write",
     "check": "biome check src/",
@@ -53,6 +54,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",
+    "@changesets/cli": "^2.31.0",
     "@types/figlet": "^1.7.0",
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
