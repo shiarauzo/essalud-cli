@@ -198,7 +198,7 @@ async function loginWithBrowser(): Promise<{ jwt: string; paciente: PacienteData
   } catch (err) {
     const msg = String(err);
     if (/Executable doesn't exist|playwright install/i.test(msg)) {
-      console.error("\nFalta el navegador de Playwright. Instalalo una sola vez con:");
+      console.error("\nFalta el navegador de Playwright. Instálalo una sola vez con:");
       console.error("  npx playwright install chromium\n");
     } else {
       console.error(`\nNo se pudo abrir el navegador: ${msg}\n`);

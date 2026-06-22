@@ -77,7 +77,7 @@ export async function cmdCancelar(
   }
 
   const ok = await confirmarInteractivo(
-    `Esto CANCELA la cita ${citActMedNum} de verdad. ¿Confirmás?`
+    `Esto CANCELA la cita ${citActMedNum} de verdad. ¿Confirmas?`
   );
   if (!ok) {
     console.log("Cancelado. No se realizó ninguna operación.");
