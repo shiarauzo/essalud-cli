@@ -101,54 +101,54 @@ que otros puedan instalar y mejorar.
 ## 4. Progress
 
 **M0 — Cerrar PRs actuales**
-- [ ] Mergear PR #1 (revisor) a `main`
-- [ ] Mergear PR #2 (publicable: login Playwright + licencia) a `main`
+- [x] Mergear PR #1 (revisor) a `main`
+- [x] Mergear PR #2 (publicable: login Playwright + licencia) a `main`
 
 **M1 — Español peruano**
-- [ ] Convertir mensajes del CLI a tuteo peruano (`cmd-login.ts` y demás)
-- [ ] Convertir README, encabezado de `LICENSE`, `docs/goal.md`, `PLANS.md`, agente revisor
-- [ ] `grep` sin voseo en el repo
+- [x] Convertir mensajes del CLI a tuteo peruano (`cmd-login.ts` y demás)
+- [x] Convertir README, encabezado de `LICENSE`, `docs/goal.md`, `PLANS.md`, agente revisor
+- [x] `grep` sin voseo en el repo
 
 **M2 — Migración del token**
-- [ ] Migrar `TOKEN_PATH`/`PACIENTE_PATH` a `~/.essalud/` en `api.ts`
-- [ ] Verificar `essalud login` escribe en `~/.essalud/`; sin referencias a `~/.tramites-pe`
+- [x] Migrar `TOKEN_PATH`/`PACIENTE_PATH` a `~/.essalud/` en `api.ts`
+- [x] Verificar `essalud login` escribe en `~/.essalud/`; sin referencias a `~/.tramites-pe`
 
 **M3 — Biome**
-- [ ] Agregar `biome.json` + scripts
-- [ ] `biome check --write` sobre `src/` y commit del formateo
+- [x] Agregar `biome.json` + scripts
+- [x] `biome check --write` sobre `src/` y commit del formateo
 
 **M4 — Tests + agente test-writer**
-- [ ] Configurar Vitest
-- [ ] Crear agente `test-writer`
-- [ ] Unit: `extractTokenFromHar`, `extractPacienteFromHar`, `decodeJwtPayload`, `looksLikeEsSaludJwt`, unwrap de `request`
-- [ ] (Opcional) api.ts con fetch mockeado
-- [ ] E2E auto-limpiante con guard `ESSALUD_E2E=1`
+- [x] Configurar Vitest
+- [x] Crear agente `test-writer`
+- [x] Unit: `extractTokenFromHar`, `extractPacienteFromHar`, `decodeJwtPayload`, `looksLikeEsSaludJwt`, unwrap de `request`
+- [x] (Opcional) api.ts con fetch mockeado
+- [x] E2E auto-limpiante con guard `ESSALUD_E2E=1`
 
 **M5 — CI + infra**
-- [ ] Workflow CI (PR): `tsc` + `biome` + unit
-- [ ] Workflow E2E manual/agendado con secreto del token
-- [ ] `CONTRIBUTING.md`
-- [ ] Templates de issues y PR en `.github/`
-- [ ] `CODE_OF_CONDUCT.md`
-- [ ] Changesets configurado
+- [x] Workflow CI (PR): `tsc` + `biome` + unit
+- [x] Workflow E2E manual/agendado con secreto del token
+- [x] `CONTRIBUTING.md`
+- [x] Templates de issues y PR en `.github/`
+- [x] `CODE_OF_CONDUCT.md`
+- [x] Changesets configurado
 
 **M6 — Agente endpoint-mapper**
-- [ ] Crear `endpoint-mapper` (HAR → api.ts vía PR)
-- [ ] Probar contra un HAR de muestra
+- [x] Crear `endpoint-mapper` (HAR → api.ts vía PR)
+- [x] Probar contra un HAR de muestra
 
 **M7 — Código modelo**
-- [ ] Correr `revisor-calidad-essalud`
-- [ ] Resolver issues (incluida advertencia obsoleta de `cancelar`)
-- [ ] Veredicto **PASS**
+- [x] Correr `revisor-calidad-essalud`
+- [x] Resolver issues (incluida advertencia obsoleta de `cancelar`)
+- [x] Veredicto **PASS**
 
 **M8 — Release listo + agente release-manager**
-- [ ] Crear `release-manager`
-- [ ] `release-manager` en dry-run
-- [ ] `npm pack` verificado
+- [x] Crear `release-manager`
+- [x] `release-manager` en dry-run
+- [x] `npm pack` verificado
 
 **M9 — Verificación final**
-- [ ] Correr `project-verifier` contra `docs/goal.md`
-- [ ] Pass por criterio con evidencia
+- [x] Correr `project-verifier` contra `docs/goal.md`
+- [x] Pass por criterio con evidencia
 
 ---
 
@@ -177,14 +177,18 @@ que otros puedan instalar y mejorar.
 
 ## 7. Outcomes & Retrospectives
 
-_(Se completa al cerrar cada milestone.)_
+- **M1 — Español peruano:** ✅ PR #4. Todo el texto a tuteo.
+- **M2 — Token `~/.essalud/`:** ✅ PR #5. Migración limpia + mensaje de diagnóstico del path viejo.
+- **M3 — Biome:** ✅ PR #6. Lint+format; eliminó código muerto.
+- **M4 — Tests + test-writer:** ✅ PR #7. Vitest (20 unit), extracción a jwt.ts/har.ts, E2E auto-limpiante, agente.
+- **M5 — CI + infra:** ✅ PR #8. CI verde en Actions; CONTRIBUTING/CoC/templates/Changesets.
+- **M6 — endpoint-mapper:** ✅ PR #9. Agente de re-derivación de la API vía PR.
+- **M7 — Código modelo:** ✅ PR #15. Revisor abrió #10–#16; todos resueltos y cerrados; veredicto **PASS**.
+- **M8 — release-manager:** ✅ PR #17. Agente de release; dry-run validado (npm pack limpio).
+- **M9 — Verificación final:** ✅ project-verifier: 12/12 criterios PASS (tras corregir voseo en el agente revisor).
 
-- **M1:** —
-- **M2:** —
-- **M3:** —
-- **M4:** —
-- **M5:** —
-- **M6:** —
-- **M7:** —
+**Qué salió bien:** la revisión adversarial en cada milestone cazó bugs reales (voseo en prompts destructivos, fuga potencial de cita, flag `--cod-centro` roto, `npm publish` vs `changeset publish`). Worktrees/ramas por milestone mantuvieron `main` siempre verde.
 
-**Qué salió bien / qué mejorar:** —
+**Qué mejorar:** los greps de voseo iniciales eran incompletos (faltaban formas como `confirmás`, `buscás`); conviene un check de voseo en CI para no depender de la revisión manual.
+
+**Pendiente (decisión de la autora, fuera del goal):** `npm login` + publicar (`pnpm changeset publish`) y hacer público el repo.
