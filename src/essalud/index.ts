@@ -106,13 +106,17 @@ export function makeEssaludCommand(): Command {
 
   essalud
     .command("cancelar <citActMedNum>")
-    .description(
-      "Cancela una cita (POST /cancelarCita). Dry-run por defecto. " +
-        "ADVERTENCIA: payload no validado en HAR — puede necesitar ajuste.",
+    .description("Cancela una cita (POST /eliminarCita). Dry-run por defecto; requiere --confirm.")
+    .option(
+      "--cod-centro <cod>",
+      "Código del centro de la cita (citCenAsiCod), si no aparece en 'citas'",
     )
     .option("--confirm", "Ejecutar la cancelación real (requiere confirmación interactiva)")
-    .action((citActMedNum: string, opts: { confirm?: boolean }) => {
-      const cancelarOpts: CancelarOptions = { confirm: opts.confirm ?? false };
+    .action((citActMedNum: string, opts: { confirm?: boolean; codCentro?: string }) => {
+      const cancelarOpts: CancelarOptions = {
+        confirm: opts.confirm ?? false,
+        codCentro: opts.codCentro,
+      };
       return cmdCancelar(citActMedNum, cancelarOpts);
     });
 
