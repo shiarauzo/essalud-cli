@@ -1,5 +1,5 @@
 import { createInterface } from "node:readline";
-import { EsSaludApiError, request } from "./api.js";
+import { type CitaEmitida, EsSaludApiError, getCitasEmitidas, request } from "./api.js";
 
 // Endpoint de cancelación CONFIRMADO del HAR (2026-06-20):
 //   POST /eliminarCita  { oriCenAsis: "1", numCitaCreada, codCentro }
@@ -9,15 +9,6 @@ import { EsSaludApiError, request } from "./api.js";
 export interface CancelarOptions {
   confirm: boolean;
   codCentro?: string;
-}
-
-interface Cita {
-  citActMedNum: string;
-  citCenAsiCod: string;
-  citCenAsiDes?: string;
-  citFecha?: string;
-  citHora?: string;
-  citEstCita?: string;
 }
 
 function confirmarInteractivo(mensaje: string): Promise<boolean> {
@@ -31,12 +22,10 @@ function confirmarInteractivo(mensaje: string): Promise<boolean> {
 }
 
 // Busca la cita en citasEmitidas para obtener su codCentro (citCenAsiCod).
-async function buscarCita(citActMedNum: string): Promise<Cita | undefined> {
+async function buscarCita(citActMedNum: string): Promise<CitaEmitida | undefined> {
   try {
-    const citas = await request<Cita[]>("POST", "citasEmitidas", {});
-    if (Array.isArray(citas)) {
-      return citas.find((c) => c.citActMedNum === citActMedNum);
-    }
+    const citas = await getCitasEmitidas();
+    return citas.find((c) => c.citActMedNum === citActMedNum);
   } catch {
     // sin citas o error de lectura -> caemos al fallback de --cod-centro
   }
@@ -53,6 +42,18 @@ export async function cmdCancelar(citActMedNum: string, opts: CancelarOptions): 
   if (!codCentro) {
     console.error(
       "No encontré la cita ni su centro. Pasa el centro con --cod-centro <cod> (es el citCenAsiCod de la cita en `essalud citas`).",
+    );
+    process.exit(1);
+  }
+
+  // Si la encontramos y la API dice que no se puede cancelar (p. ej. ya anulada), paramos.
+  // Nota: acá bloqueamos solo el caso DEFINITIVO (`=== false`) porque el usuario nombró
+  // una cita explícita; el menú interactivo, en cambio, solo OFRECE las `=== true`
+  // (más conservador, para no listar candidatas dudosas en una operación irreversible).
+  if (cita && cita.puedeCancelar === false) {
+    const motivo = cita.citaAnulada ? "ya está anulada" : "no se puede cancelar";
+    console.error(
+      `Esta cita ${motivo} (estado: ${cita.citEstCita ?? "?"}). No hay nada que cancelar.`,
     );
     process.exit(1);
   }

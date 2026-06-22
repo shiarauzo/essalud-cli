@@ -145,6 +145,10 @@ export interface CitaEmitida {
   citCenAsiDes?: string;
   /** Código del centro de la cita; necesario para cancelarla (POST eliminarCita). */
   citCenAsiCod?: string;
+  /** La API marca con `puedeCancelar` si la cita todavía se puede cancelar. */
+  puedeCancelar?: boolean;
+  /** true si la cita ya fue anulada. */
+  citaAnulada?: boolean;
   [key: string]: unknown;
 }
 
