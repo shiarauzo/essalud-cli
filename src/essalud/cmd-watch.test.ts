@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Cupo } from "./api.js";
+import { type Cupo, HttpError } from "./api.js";
 import { runWatch, type WatchDependencies } from "./cmd-watch.js";
 import { normalizeCupos, type WatchTarget } from "./watch.js";
 import { WATCH_STATE_VERSION, type WatchSnapshot } from "./watch-state.js";
@@ -116,7 +116,7 @@ describe("runWatch", () => {
     let sleeps = 0;
     const getCupos = vi
       .fn()
-      .mockRejectedValueOnce(new Error("fetch failed"))
+      .mockRejectedValueOnce(new TypeError("fetch failed"))
       .mockResolvedValueOnce([cupo()]);
     const deps = dependencies(controller, {
       getCupos,
@@ -131,6 +131,37 @@ describe("runWatch", () => {
     expect(getCupos).toHaveBeenCalledTimes(2);
     expect(deps.saveState).toHaveBeenCalledOnce();
     expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining("Reintentando"));
+  });
+
+  it.each([429, 503])("reintenta respuestas HTTP %i", async (status) => {
+    const controller = new AbortController();
+    let sleeps = 0;
+    const getCupos = vi
+      .fn()
+      .mockRejectedValueOnce(new HttpError(status, "Error", "POST", "/programacionDisponible"))
+      .mockResolvedValueOnce([cupo()]);
+    const deps = dependencies(controller, {
+      getCupos,
+      sleep: vi.fn().mockImplementation(async () => {
+        sleeps += 1;
+        if (sleeps === 2) controller.abort();
+      }),
+    });
+
+    expect(await runWatch(target, 300_000, controller.signal, deps)).toBe("stopped");
+    expect(getCupos).toHaveBeenCalledTimes(2);
+    expect(deps.saveState).toHaveBeenCalledOnce();
+  });
+
+  it("detiene errores desconocidos sin reintentarlos", async () => {
+    const controller = new AbortController();
+    const deps = dependencies(controller, {
+      getCupos: vi.fn().mockRejectedValue(new Error("fallo inesperado")),
+    });
+
+    expect(await runWatch(target, 300_000, controller.signal, deps)).toBe("fatal-error");
+    expect(deps.sleep).not.toHaveBeenCalled();
+    expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining("El watch se detuvo"));
   });
 
   it("renueva un access token vencido antes de consultar", async () => {
@@ -153,7 +184,7 @@ describe("runWatch", () => {
     let sleeps = 0;
     const renewSession = vi
       .fn()
-      .mockRejectedValueOnce(new Error("fetch failed"))
+      .mockRejectedValueOnce(new TypeError("fetch failed"))
       .mockResolvedValueOnce(jwt(2_000_000_000));
     const deps = dependencies(controller, {
       readAccessToken: vi.fn().mockResolvedValue(jwt(1)),
@@ -185,7 +216,7 @@ describe("runWatch", () => {
   it("no confunde un 403 con token vigente con una expiración", async () => {
     const controller = new AbortController();
     const deps = dependencies(controller, {
-      getCupos: vi.fn().mockRejectedValue(new Error("HTTP 403 Forbidden — POST /x")),
+      getCupos: vi.fn().mockRejectedValue(new HttpError(403, "Forbidden", "POST", "/x")),
     });
 
     expect(await runWatch(target, 300_000, controller.signal, deps)).toBe("fatal-error");
@@ -209,7 +240,7 @@ describe("runWatch", () => {
       .fn()
       .mockResolvedValueOnce([slotA]) // poll 1: baseline (sin estado previo)
       .mockResolvedValueOnce([slotA]) // poll 2: sin cambios
-      .mockRejectedValueOnce(new Error("fetch failed")) // poll 3: error transitorio
+      .mockRejectedValueOnce(new TypeError("fetch failed")) // poll 3: error transitorio
       .mockResolvedValueOnce([slotA, slotB]) // poll 4: slotB es genuinamente nuevo
       .mockResolvedValueOnce([slotA, slotB]); // poll 5: sin cambios, no debe duplicar
 

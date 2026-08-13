@@ -121,6 +121,15 @@ export class DesktopNotifier implements Notifier {
     private readonly warn: (message: string) => void = console.warn,
   ) {}
 
+  private async useFallback(error: unknown, notify: () => Promise<void>): Promise<void> {
+    if (!this.warned) {
+      this.warned = true;
+      this.warn(`No se pudo mostrar la notificación de escritorio (${String(error)}).`);
+      this.warn("Se usarán notificaciones en la terminal.");
+    }
+    await notify();
+  }
+
   async notify(event: NewSlotsEvent): Promise<void> {
     const title = `EsSalud: ${event.slots.length} ${event.slots.length === 1 ? "cupo nuevo" : "cupos nuevos"}`;
     const visible = event.slots.slice(0, MAX_DESKTOP_SLOTS);
@@ -134,12 +143,7 @@ export class DesktopNotifier implements Notifier {
       await this.runCommand(command.command, command.args);
       this.log(formatNewSlots(event));
     } catch (error) {
-      if (!this.warned) {
-        this.warned = true;
-        this.warn(`No se pudo mostrar la notificación de escritorio (${String(error)}).`);
-        this.warn("Se usarán notificaciones en la terminal.");
-      }
-      await this.fallback.notify(event);
+      await this.useFallback(error, () => this.fallback.notify(event));
     }
   }
 
@@ -152,12 +156,7 @@ export class DesktopNotifier implements Notifier {
       await this.runCommand(command.command, command.args);
       this.log(`\n🔒 ${message}`);
     } catch (error) {
-      if (!this.warned) {
-        this.warned = true;
-        this.warn(`No se pudo mostrar la notificación de escritorio (${String(error)}).`);
-        this.warn("Se usarán notificaciones en la terminal.");
-      }
-      await this.fallback.notifySessionExpired();
+      await this.useFallback(error, () => this.fallback.notifySessionExpired());
     }
   }
 }

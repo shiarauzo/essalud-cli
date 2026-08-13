@@ -1,7 +1,7 @@
 import {
   type Cupo,
-  EsSaludApiError,
   getProgramacionDisponible,
+  HttpError,
   readToken,
   renovarSesion,
 } from "./api.js";
@@ -96,16 +96,15 @@ function tokenExpired(token: string, now: number): boolean {
 }
 
 function authenticationStatus(error: unknown): number | null {
-  const match = /\bHTTP\s+(401|403)\b/.exec(String(error));
-  return match ? Number(match[1]) : null;
+  if (!(error instanceof HttpError)) return null;
+  return error.status === 401 || error.status === 403 ? error.status : null;
 }
 
 function isTransientError(error: unknown): boolean {
-  if (error instanceof EsSaludApiError) return false;
-  const match = /\bHTTP\s+(\d{3})\b/.exec(String(error));
-  if (!match) return true;
-  const status = Number(match[1]);
-  return status === 429 || status >= 500;
+  if (error instanceof HttpError) {
+    return error.status === 429 || error.status >= 500;
+  }
+  return error instanceof TypeError;
 }
 
 function withJitter(value: number, random: number, proportion: number): number {
@@ -130,7 +129,7 @@ async function ensureActiveSession(dependencies: WatchDependencies): Promise<"ac
   return "expired";
 }
 
-async function loadPreviousSlots(
+async function loadPreviousSnapshot(
   target: WatchTarget,
   path: string,
   dependencies: WatchDependencies,
@@ -155,7 +154,7 @@ export async function runWatch(
   dependencies: WatchDependencies,
 ): Promise<WatchResult> {
   const path = dependencies.statePath(target);
-  let previousSnapshot = await loadPreviousSlots(target, path, dependencies);
+  let previousSnapshot = await loadPreviousSnapshot(target, path, dependencies);
   let failures = 0;
 
   dependencies.log(
