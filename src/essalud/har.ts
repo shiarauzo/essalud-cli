@@ -1,7 +1,7 @@
 // Helpers puros para extraer el token y los datos del paciente de un HAR
 // exportado de DevTools, o del body de la respuesta /api/lg del login.
 
-import type { PacienteData } from "./api.js";
+import { type Credenciales, type PacienteData, parseCredenciales } from "./api.js";
 import { JWT_RE, looksLikeEsSaludJwt } from "./jwt.js";
 
 interface HarEntry {
@@ -34,9 +34,14 @@ export function parsePacienteFromLgBody(responseText: string): PacienteData | nu
           apePaterno?: string;
           apeMaterno?: string;
           nombres?: string;
+          // El portal nuevo parte el nombre en priNombre/segNombre.
+          priNombre?: string;
+          segNombre?: string;
           email?: string;
           nroCelular?: string;
           celular?: string;
+          // …y renombró el celular a numCelular.
+          numCelular?: string;
         };
       };
     };
@@ -44,18 +49,45 @@ export function parsePacienteFromLgBody(responseText: string): PacienteData | nu
     const raw = json?.data?.paciente;
     if (!raw) return null;
 
+    const nombres = raw.nombres ?? [raw.priNombre, raw.segNombre].filter(Boolean).join(" ");
+
     return {
       codCentro: raw.codCentro ?? "",
       desCentro: raw.desCentro ?? "",
       apePaterno: raw.apePaterno ?? "",
       apeMaterno: raw.apeMaterno ?? "",
-      nombres: raw.nombres ?? null,
+      nombres: nombres || null,
       email: raw.email ?? null,
-      celular: raw.nroCelular ?? raw.celular ?? null,
+      celular: raw.numCelular ?? raw.nroCelular ?? raw.celular ?? null,
     };
   } catch {
     return null;
   }
+}
+
+/** Extrae el par completo (access + refresh) del /api/lg de un HAR.
+ *  El refresh token es lo que después permite renovar sin navegador. */
+export function extractCredencialesFromHar(harContent: string): Credenciales | null {
+  let har: { log?: { entries?: HarEntry[] } };
+  try {
+    har = JSON.parse(harContent) as { log?: { entries?: HarEntry[] } };
+  } catch {
+    return null;
+  }
+
+  // El HAR es cronológico: nos quedamos con el login más reciente.
+  let cred: Credenciales | null = null;
+  for (const entry of har.log?.entries ?? []) {
+    if (!(entry.request?.url ?? "").includes("/api/lg")) continue;
+    const body = entry.response?.content?.text ?? "";
+    if (!body) continue;
+    try {
+      cred = parseCredenciales(JSON.parse(body)) ?? cred;
+    } catch {
+      // Body no-JSON (truncado por DevTools): lo ignoramos.
+    }
+  }
+  return cred;
 }
 
 /** Extrae el JWT Bearer más reciente de un HAR. */

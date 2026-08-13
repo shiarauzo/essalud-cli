@@ -7,6 +7,7 @@ import { cmdLogin, type LoginOptions } from "./cmd-login.js";
 import { cmdPerfil } from "./cmd-perfil.js";
 import { cmdReservar, type ReservarOptions } from "./cmd-reservar.js";
 import { cmdToken } from "./cmd-token.js";
+import { cmdWatch } from "./cmd-watch.js";
 import { runInteractiveMode } from "./interactive.js";
 
 export function makeEssaludCommand(): Command {
@@ -28,15 +29,15 @@ export function makeEssaludCommand(): Command {
 
   essalud
     .command("login")
-    .description(
-      "Login asistido: abre browser headed, captura el Bearer token de EsSalud y lo guarda.",
-    )
+    .description("Login asistido: abre browser headed, captura la sesión de EsSalud y la guarda.")
     .option("--token <jwt>", "Pegar el JWT directamente (sin abrir browser)")
-    .option("--from-har <path>", "Importar token desde un HAR exportado de DevTools")
-    .action((opts: { token?: string; fromHar?: string }) => {
+    .option("--from-har <path>", "Importar la sesión desde un HAR exportado de DevTools")
+    .option("--renovar", "Renovar con el refresh token guardado (sin browser ni captcha)")
+    .action((opts: { token?: string; fromHar?: string; renovar?: boolean }) => {
       const loginOpts: LoginOptions = {
         token: opts.token,
         fromHar: opts.fromHar,
+        renovar: opts.renovar,
       };
       return cmdLogin(loginOpts);
     });
@@ -55,6 +56,24 @@ export function makeEssaludCommand(): Command {
     )
     .action((codCentro: string, codServicioHosp: string, codActSubAct: string) =>
       cmdFechas(codCentro, codServicioHosp, codActSubAct),
+    );
+
+  essalud
+    .command("watch <codCentro> <codServicioHosp> <codActSubAct>")
+    .description("Monitorea cupos nuevos periódicamente (solo lectura).")
+    .option("--interval <duracion>", "Intervalo entre consultas (mínimo 2m)", "5m")
+    .option("--notify <modo>", "Notificación terminal o desktop", "terminal")
+    .action(
+      (
+        codCentro: string,
+        codServicioHosp: string,
+        codActSubAct: string,
+        opts: { interval?: string; notify?: string },
+      ) =>
+        cmdWatch(codCentro, codServicioHosp, codActSubAct, {
+          interval: opts.interval,
+          notify: opts.notify,
+        }),
     );
 
   essalud

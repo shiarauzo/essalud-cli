@@ -10,11 +10,12 @@ CLI **no oficial** para reservar y cancelar citas de EsSalud desde la terminal.
 ## Requisitos
 
 - Node >= 20
-- Un navegador de Playwright (para el login asistido). Se instala una sola vez:
+- Solo para el login asistido: un navegador Chromium. El CLI usa el que ya tengas
+  instalado (Brave, Chrome, Edge) y, si no encuentra ninguno, el de Playwright:
   ```bash
   npx playwright install chromium
   ```
-  Si no lo instalas, el login asistido te avisa; igual puedes iniciar sesión con `--token` o `--from-har`.
+  No hace falta para `--from-har`, `--token` ni `--renovar`.
 
 ## Instalación
 
@@ -26,31 +27,61 @@ Después, en cualquier carpeta:
 
 ```bash
 essalud          # modo interactivo (menú navegable)
-essalud login    # inicia sesión: abre un navegador aislado y captura el token
+essalud login    # inicia sesión (ver "Login": lo más confiable es --from-har)
 essalud perfil   # subcomando one-shot
 essalud citas
 ```
 
 ## Login
 
-`essalud login` **abre un navegador nuevo y aislado** (perfil limpio, no toca tu Chrome):
-
-1. Ingresas tu DNI y clave en el navegador.
-2. Completas el captcha de Cloudflare Turnstile.
-3. Esperas a ver tu panel (lista de citas).
-
-El CLI captura el token automáticamente desde la red, lo valida contra `/perfil` y lo
-guarda. La sesión del navegador es efímera: se descarta al terminar.
-
-¿No quieres/puedes usar el navegador asistido? Hay dos caminos manuales:
+El login de EsSalud está protegido con Cloudflare Turnstile, que **rechaza los
+navegadores automatizados**. Por eso el camino más confiable es importar la sesión
+desde un HAR de tu navegador normal:
 
 ```bash
-# A) pegar el token a mano (Authorization: Bearer <jwt> desde DevTools → Network)
-essalud login --token <jwt>
-
-# B) importar desde un HAR exportado de DevTools
 essalud login --from-har ~/Downloads/captura.har
 ```
+
+Para capturar ese HAR:
+
+1. Abre <https://digital.essalud.gob.pe/login> **sin loguearte todavía**.
+2. DevTools (F12) → **Network** → marca **Preserve log** y limpia la lista.
+3. Ahora sí loguéate y entra a tus citas.
+4. Click derecho en la lista → **Save all as HAR with content**.
+
+El CLI saca del body de `/api/lg` el access token **y el refresh token**, guarda tus
+datos de paciente y valida la sesión contra `/perfil`. El HAR contiene tu token: bórralo
+después de importarlo.
+
+### Renovación: no repites esto cada día
+
+El access token dura 24 h, y el refresh token vence junto con él — pero cada renovación
+emite un par nuevo con 24 h frescas. El CLI renueva **solo**: si una request falla por
+token vencido, llama a `/retoken`, guarda el par nuevo y reintenta. Mientras uses el CLI
+al menos una vez cada 24 h, no vuelves a pasar por el navegador ni el captcha.
+
+Para renovar a mano:
+
+```bash
+essalud login --renovar
+```
+
+### Otros caminos
+
+```bash
+# Login asistido: abre un navegador real del sistema (Brave/Chrome/Edge), perfil
+# limpio y efímero. Puede fallar por Turnstile aunque tu clave esté bien.
+essalud login
+
+# Pegar el token a mano (queda sin refresh token: al vencer, login de nuevo).
+# Está en DevTools → Network → request 'lg' → Response → data.credenciales.access_token
+essalud login --token <jwt>
+```
+
+> El portal migró de `miconsulta.essalud.gob.pe` a `digital.essalud.gob.pe`; la API sigue
+> en `api.miconsulta.essalud.gob.pe`. El portal nuevo autentica sus propias llamadas con
+> una cabecera `x-device-id` y no manda `Authorization`, así que el token del CLI solo
+> aparece en el body del login: por eso el HAR tiene que incluir el `/api/lg`.
 
 ## Modo interactivo
 
