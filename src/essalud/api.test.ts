@@ -10,7 +10,7 @@ vi.mock("node:fs/promises", () => ({
   rm: vi.fn(async () => {}),
 }));
 
-import { EsSaludApiError, parseCredenciales, renovarSesion, request } from "./api.js";
+import { EsSaludApiError, HttpError, parseCredenciales, renovarSesion, request } from "./api.js";
 
 function mockFetch(body: unknown, ok = true, status = 200): void {
   vi.stubGlobal(
@@ -62,9 +62,14 @@ describe("request", () => {
     await expect(request("GET", "perfil")).resolves.toEqual({ nombreAsegurado: "Juan" });
   });
 
-  it("lanza un error de HTTP cuando la respuesta no es ok", async () => {
+  it("expone el estado HTTP cuando la respuesta no es ok", async () => {
     mockFetch({}, false, 500);
-    await expect(request("GET", "perfil")).rejects.toThrow(/HTTP 500/);
+    await expect(request("GET", "perfil")).rejects.toMatchObject({
+      name: "HttpError",
+      status: 500,
+      method: "GET",
+      path: "/perfil",
+    });
   });
 
   it("renueva y reintenta cuando el token está vencido (403)", async () => {
@@ -116,9 +121,11 @@ describe("renovarSesion", () => {
     await expect(renovarSesion()).resolves.toBeNull();
   });
 
-  it("propaga errores transitorios para que el llamador pueda reintentar", async () => {
+  it("propaga errores transitorios de /retoken con su estado HTTP", async () => {
     mockFetchSequence([{ status: 500, body: {} }]);
-    await expect(renovarSesion()).rejects.toThrow(/HTTP 500/);
+    const renovacion = renovarSesion();
+    await expect(renovacion).rejects.toBeInstanceOf(HttpError);
+    await expect(renovacion).rejects.toMatchObject({ status: 500, path: "/retoken" });
   });
 });
 

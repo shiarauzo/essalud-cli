@@ -8,6 +8,18 @@ export const TOKEN_PATH = join(homedir(), ".essalud", "token");
 export const REFRESH_TOKEN_PATH = join(homedir(), ".essalud", "refresh_token");
 export const PACIENTE_PATH = join(homedir(), ".essalud", "paciente.json");
 
+export class HttpError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly statusText: string,
+    public readonly method: "GET" | "POST",
+    public readonly path: string,
+  ) {
+    super(`HTTP ${status} ${statusText} — ${method} ${path}`);
+    this.name = "HttpError";
+  }
+}
+
 /** Ubicación antigua del token (antes de renombrar el proyecto a essalud-cli).
  *  Solo se usa para dar un mensaje de diagnóstico; no se lee como token válido. */
 const LEGACY_TOKEN_PATH = join(homedir(), ".tramites-pe", "essalud", "token");
@@ -134,7 +146,7 @@ export async function renovarSesion(): Promise<string | null> {
   });
   if (!res.ok) {
     if (res.status === 429 || res.status >= 500) {
-      throw new Error(`HTTP ${res.status} ${res.statusText} — POST /retoken`);
+      throw new HttpError(res.status, res.statusText, "POST", "/retoken");
     }
     return null;
   }
@@ -180,7 +192,7 @@ export async function request<T>(method: "GET" | "POST", path: string, body?: un
   }
 
   if (!res.ok) {
-    throw new Error(`HTTP ${res.status} ${res.statusText} — ${method} /${path}`);
+    throw new HttpError(res.status, res.statusText, method, `/${path}`);
   }
 
   const json = (await res.json()) as Record<string, unknown>;

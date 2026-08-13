@@ -44,7 +44,8 @@ Tres capas, en orden de prioridad:
 - Stack: TypeScript ESM, Node ≥20, CLI con `commander` + `@clack/prompts`; login con Playwright.
 - Licencia: **PolyForm Noncommercial 1.0.0**.
 - Repo único: `shiarauzo/essalud-cli` (privado hasta que la autora decida publicarlo).
-- El token y los datos del paciente nunca salen de la máquina del usuario (permisos `600`).
+- Las credenciales y los datos del paciente se guardan localmente con permisos `600`.
+  El CLI solo envía las credenciales a la API HTTPS de EsSalud para autenticar solicitudes.
 - La API es reverse-engineered: puede cambiar; el diseño debe tolerar re-derivar endpoints (de ahí `endpoint-mapper`).
 - Linter/formatter: Biome. Tests: Vitest. CI: GitHub Actions.
 - Idioma: **español peruano** (tuteo: "quieres", "tienes", "haz"), **sin voseo argentino**, en todo — CLI, mensajes de error, README, docs e issues.
