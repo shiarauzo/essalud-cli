@@ -5,7 +5,8 @@ CLI **no oficial** para reservar y cancelar citas de EsSalud desde la terminal.
 > ⚠️ **Disclaimer.** Proyecto independiente, **no afiliado a EsSalud**. Usa la API
 > pública de su portal de citas mediante ingeniería inversa, así que puede dejar de
 > funcionar si EsSalud cambia su backend. Usalo bajo tu responsabilidad.
-> **Tu token y tus datos nunca salen de tu máquina** (se guardan localmente con permisos `600`).
+> Las credenciales se guardan localmente con permisos `600` y el CLI solo las envía
+> a la API HTTPS de EsSalud para autenticar tus solicitudes.
 
 ## Requisitos
 
@@ -116,15 +117,39 @@ El flujo "Reservar una cita" es guiado: especialidad → actividad → cupo disp
 | `essalud citas` | Citas emitidas (POST /citasEmitidas) |
 | `essalud especialidades <codCentro>` | Lista especialidades del centro |
 | `essalud fechas <codCentro> <codServicioHosp> <codActSubAct>` | Cupos disponibles |
+| `essalud watch <codCentro> <codServicioHosp> <codActSubAct>` | Avisa cuando aparecen slots nuevos |
 | `essalud reservar` | Reservar cita (requiere `--confirm` para el POST real) |
 | `essalud cancelar <citActMedNum>` | Cancelar cita (requiere `--confirm`) |
 
-## Token
+## Monitorear cupos
 
-El token JWT se guarda en `~/.essalud/token` (chmod `600`).
-Para obtenerlo: `essalud login`, o manualmente con `essalud login --token <jwt>`.
+`watch` consulta periódicamente la misma programación que `fechas` y avisa cuando
+aparece un slot que no estaba en la consulta anterior:
 
-**El token nunca sale de tu máquina.**
+```bash
+essalud watch 021 F11 B1010
+essalud watch 021 F11 B1010 --interval 10m --notify desktop
+```
+
+- El intervalo por defecto es `5m` y el mínimo permitido es `2m`.
+- La primera consulta crea un baseline y no envía alertas.
+- El estado de cada búsqueda se guarda por separado en `~/.essalud/watch/`.
+- `terminal` muestra una alerta y una campana; `desktop` usa las notificaciones
+  del sistema y cae a terminal si no están disponibles.
+- El comando es de solo lectura: nunca reserva ni cancela automáticamente.
+- Presiona `Ctrl+C` para detenerlo.
+
+## Credenciales
+
+El access token se guarda en `~/.essalud/token` y, cuando está disponible, el refresh
+token en `~/.essalud/refresh_token`. Ambos archivos usan permisos `600`.
+
+El CLI envía el access token únicamente a la API HTTPS de EsSalud como credencial de
+autenticación. Para renovar una sesión, envía el refresh token al endpoint HTTPS
+`/retoken` de esa misma API.
+
+Para obtenerlos: `essalud login`, o manualmente con `essalud login --token <jwt>`
+(este último método no guarda un refresh token).
 
 ## Desarrollo
 
@@ -153,6 +178,10 @@ src/
     cmd-login.ts            # essalud login (navegador Playwright + --token + --from-har)
     cmd-especialidades.ts   # essalud especialidades
     cmd-fechas.ts           # essalud fechas
+    cmd-watch.ts            # essalud watch
+    watch.ts                # normalización y detección de slots nuevos
+    watch-state.ts          # snapshots persistentes por búsqueda
+    watch-notifier.ts       # alertas de terminal y escritorio
     cmd-reservar.ts         # essalud reservar
     cmd-cancelar.ts         # essalud cancelar
     index.ts                # router de subcomandos essalud
