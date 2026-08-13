@@ -1,15 +1,34 @@
+import { existsSync } from "node:fs";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { type Browser, chromium } from "playwright";
-import { getPerfil, PACIENTE_PATH, type PacienteData, type Perfil, TOKEN_PATH } from "./api.js";
-import { extractPacienteFromHar, extractTokenFromHar, parsePacienteFromLgBody } from "./har.js";
+import {
+  type Credenciales,
+  getPaciente,
+  getPerfil,
+  PACIENTE_PATH,
+  type PacienteData,
+  type Perfil,
+  parseCredenciales,
+  readRefreshToken,
+  renovarSesion,
+  saveCredenciales,
+} from "./api.js";
+import {
+  extractCredencialesFromHar,
+  extractPacienteFromHar,
+  extractTokenFromHar,
+  parsePacienteFromLgBody,
+} from "./har.js";
 import { decodeJwtPayload, JWT_RE, looksLikeEsSaludJwt } from "./jwt.js";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const LOGIN_URL = "https://miconsulta.essalud.gob.pe/login";
+// El portal migró de miconsulta.essalud.gob.pe a digital.essalud.gob.pe (la URL
+// vieja redirige). La API, en cambio, sigue en api.miconsulta.
+const LOGIN_URL = "https://digital.essalud.gob.pe/login";
 const API_HOST = "api.miconsulta.essalud.gob.pe";
 /** Tiempo máximo que esperamos a que el usuario complete el login en el navegador. */
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
@@ -19,10 +38,12 @@ const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 // ---------------------------------------------------------------------------
 
 export interface LoginOptions {
-  /** JWT to save directly (skip browser) */
+  /** JWT que se guardará directamente (sin abrir el navegador). */
   token?: string;
-  /** Path to a HAR file to extract the token from */
+  /** Ruta del archivo HAR del que se extraerá la sesión. */
   fromHar?: string;
+  /** Renueva la sesión usando el refresh token guardado. */
+  renovar?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -34,14 +55,42 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
+ * Navegadores Chromium del sistema, en orden de preferencia.
+ * El Chromium que trae Playwright es rechazado por el Turnstile del portal
+ * ("No pudimos completar el inicio de sesión"), así que preferimos un binario real.
+ */
+const SYSTEM_BROWSERS: ReadonlyArray<{ name: string; path: string }> = [
+  { name: "Brave", path: "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" },
+  { name: "Chrome", path: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" },
+  { name: "Edge", path: "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge" },
+  { name: "Chromium", path: "/Applications/Chromium.app/Contents/MacOS/Chromium" },
+  { name: "Brave", path: "/usr/bin/brave-browser" },
+  { name: "Chrome", path: "/usr/bin/google-chrome" },
+  { name: "Chromium", path: "/usr/bin/chromium" },
+];
+
+function findSystemBrowser(): { name: string; path: string } | null {
+  return SYSTEM_BROWSERS.find((b) => existsSync(b.path)) ?? null;
+}
+
+/**
  * Abre un navegador real (headed), espera a que el usuario se loguee y captura
  * el Bearer token y los datos del paciente directamente de la red.
  * Devuelve null si no se pudo capturar (timeout, navegador cerrado, etc.).
  */
-async function loginWithBrowser(): Promise<{ jwt: string; paciente: PacienteData | null } | null> {
+async function loginWithBrowser(): Promise<{
+  cred: Credenciales;
+  paciente: PacienteData | null;
+} | null> {
   let browser: Browser;
+  const systemBrowser = findSystemBrowser();
   try {
-    browser = await chromium.launch({ headless: false });
+    browser = await chromium.launch({
+      headless: false,
+      executablePath: systemBrowser?.path,
+      // Sin esto Chromium expone navigator.webdriver y Turnstile rechaza el login.
+      args: ["--disable-blink-features=AutomationControlled"],
+    });
   } catch (err) {
     const msg = String(err);
     if (/Executable doesn't exist|playwright install/i.test(msg)) {
@@ -53,21 +102,23 @@ async function loginWithBrowser(): Promise<{ jwt: string; paciente: PacienteData
     return null;
   }
 
-  const context = await browser.newContext();
+  const context = await browser.newContext({
+    locale: "es-PE",
+    timezoneId: "America/Lima",
+    viewport: null,
+  });
+  // Segundo cinturón: aunque el flag de arriba falle, ocultamos la marca de automatización.
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+  });
   const page = await context.newPage();
 
-  let jwt: string | null = null;
+  let cred: Credenciales | null = null;
   let paciente: PacienteData | null = null;
 
-  // Capturar el Bearer de cualquier request autenticado a la API.
-  context.on("request", (req) => {
-    if (jwt || !req.url().includes(API_HOST)) return;
-    const auth = req.headers().authorization ?? "";
-    const m = auth.match(/Bearer\s+(\S+)/i);
-    if (m && looksLikeEsSaludJwt(m[1])) jwt = m[1];
-  });
-
-  // Capturar paciente (y, como respaldo, el token) del body del login /api/lg.
+  // Capturar el par completo (access + refresh) y el paciente del body del login.
+  // El portal nuevo no manda Authorization en sus requests, así que el body de
+  // /api/lg es la única fuente del refresh token.
   context.on("response", async (res) => {
     if (!res.url().includes("/api/lg")) return;
     let body: string;
@@ -76,18 +127,35 @@ async function loginWithBrowser(): Promise<{ jwt: string; paciente: PacienteData
     } catch {
       return;
     }
-    paciente = parsePacienteFromLgBody(body) ?? paciente;
-    if (!jwt) {
-      const m = body.match(JWT_RE);
-      if (m && looksLikeEsSaludJwt(m[0])) jwt = m[0];
+    if (!res.ok()) {
+      console.log(`\n(el portal respondió ${res.status()} al login — reintenta en el navegador)`);
     }
+    paciente = parsePacienteFromLgBody(body) ?? paciente;
+    try {
+      cred = parseCredenciales(JSON.parse(body)) ?? cred;
+    } catch {
+      // Body no-JSON: caemos al respaldo por regex de más abajo.
+    }
+    if (!cred) {
+      const m = body.match(JWT_RE);
+      if (m && looksLikeEsSaludJwt(m[0])) cred = { access_token: m[0] };
+    }
+  });
+
+  // Respaldo: si el login ya ocurrió en otra pestaña, sirve cualquier Bearer
+  // que viaje a la API (sin refresh token, pero al menos entra).
+  context.on("request", (req) => {
+    if (cred || !req.url().includes(API_HOST)) return;
+    const auth = req.headers().authorization ?? "";
+    const m = auth.match(/Bearer\s+(\S+)/i);
+    if (m && looksLikeEsSaludJwt(m[1])) cred = { access_token: m[1] };
   });
 
   await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded" }).catch(() => {});
 
   console.log();
   console.log("─".repeat(60));
-  console.log("Se abrió un navegador en:");
+  console.log(`Se abrió un navegador${systemBrowser ? ` (${systemBrowser.name})` : ""} en:`);
   console.log(`  ${LOGIN_URL}`);
   console.log();
   console.log("Pasos:");
@@ -104,26 +172,19 @@ async function loginWithBrowser(): Promise<{ jwt: string; paciente: PacienteData
   });
 
   const start = Date.now();
-  while (!jwt && !browserClosed && Date.now() - start < LOGIN_TIMEOUT_MS) {
+  while (!cred && !browserClosed && Date.now() - start < LOGIN_TIMEOUT_MS) {
     await sleep(500);
   }
 
   await browser.close().catch(() => {});
 
-  if (!jwt) return null;
-  return { jwt, paciente };
+  if (!cred) return null;
+  return { cred, paciente };
 }
 
 // ---------------------------------------------------------------------------
 // Persistencia
 // ---------------------------------------------------------------------------
-
-async function saveToken(jwt: string): Promise<void> {
-  await mkdir(dirname(TOKEN_PATH), { recursive: true });
-  await writeFile(TOKEN_PATH, `${jwt}\n`, { encoding: "utf-8", mode: 0o600 });
-  // writeFile mode puede quedar enmascarado por el umask — forzamos los permisos.
-  await chmod(TOKEN_PATH, 0o600);
-}
 
 async function savePaciente(paciente: PacienteData): Promise<void> {
   await mkdir(dirname(PACIENTE_PATH), { recursive: true });
@@ -153,9 +214,14 @@ async function validateAndPrint(jwt: string): Promise<void> {
     throw new Error(`Token guardado pero /perfil falló: ${String(err)}`);
   }
 
-  const nombre = [perfil.nombreAsegurado, perfil.apellidoPatAsegurado, perfil.apellidoMatAsegurado]
-    .filter(Boolean)
-    .join(" ");
+  // /perfil ya no devuelve el nombre (el portal nuevo solo lo manda en el login),
+  // así que lo tomamos del paciente guardado y caemos al documento del perfil.
+  const paciente = await getPaciente();
+  const nombre = paciente
+    ? [paciente.apePaterno, paciente.apeMaterno, paciente.nombres].filter(Boolean).join(" ")
+    : "";
+  const quien =
+    nombre || (perfil.numeroDocIdent ? `documento ${perfil.numeroDocIdent}` : "asegurado");
 
   const payload = decodeJwtPayload(jwt);
   let expInfo = "";
@@ -164,7 +230,14 @@ async function validateAndPrint(jwt: string): Promise<void> {
     expInfo = ` | Expira: ${expDate.toLocaleString("es-PE", { timeZone: "America/Lima" })}`;
   }
 
-  console.log(`\n✓ Logueado como: ${nombre || "(sin nombre en perfil)"}${expInfo}`);
+  console.log(`\n✓ Logueado como: ${quien}${expInfo}`);
+
+  if (await readRefreshToken()) {
+    console.log("  Renovación automática activa: mientras uses el CLI cada 24h, no");
+    console.log("  necesitas volver a loguearte (o corre `essalud login --renovar`).");
+  } else {
+    console.log("  Sin refresh token: al vencer tendrás que loguearte de nuevo.");
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -172,6 +245,20 @@ async function validateAndPrint(jwt: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function cmdLogin(opts: LoginOptions = {}): Promise<void> {
+  // Renovar con el refresh token guardado: sin navegador y sin captcha.
+  if (opts.renovar) {
+    const jwt = await renovarSesion();
+    if (!jwt) {
+      console.error("No se pudo renovar la sesión.");
+      console.error("El refresh token no existe o ya venció (dura 24h como el access token).");
+      console.error("Corre `essalud login` para iniciar sesión de nuevo.");
+      process.exit(1);
+    }
+    console.log("Sesión renovada.");
+    await validateAndPrint(jwt);
+    return;
+  }
+
   // Plan B — token pegado a mano.
   if (opts.token) {
     const jwt = opts.token.trim().replace(/^Bearer\s+/i, "");
@@ -179,7 +266,7 @@ export async function cmdLogin(opts: LoginOptions = {}): Promise<void> {
       console.error("Error: el token no parece un JWT válido (debería empezar con 'ey...').");
       process.exit(1);
     }
-    await saveToken(jwt);
+    await saveCredenciales({ access_token: jwt });
     console.log("Token guardado.");
     await validateAndPrint(jwt);
     return;
@@ -194,18 +281,24 @@ export async function cmdLogin(opts: LoginOptions = {}): Promise<void> {
       console.error(`Error: no se pudo leer el HAR: ${opts.fromHar}`);
       process.exit(1);
     }
-    const jwt = extractTokenFromHar(opts.fromHar, content);
-    if (!jwt) {
+    // El body de /api/lg trae el par completo; el escaneo de Bearer es el respaldo
+    // para HARs que solo capturaron requests ya autenticados.
+    const cred = extractCredencialesFromHar(content) ?? {
+      access_token: extractTokenFromHar(opts.fromHar, content) ?? "",
+    };
+    if (!cred.access_token) {
       console.error(
-        `No se encontró ningún header Authorization: Bearer en requests a ${API_HOST} en el HAR.`,
+        `No se encontró ningún token en el HAR (ni en el body de /api/lg ni en un header Authorization a ${API_HOST}).`,
       );
-      console.error(
-        "Verifica que el HAR incluya requests autenticados al panel (no solo el login).",
-      );
+      console.error("Verifica que el HAR incluya el login o requests autenticados al panel.");
       process.exit(1);
     }
-    await saveToken(jwt);
-    console.log("Token extraído del HAR y guardado.");
+    await saveCredenciales(cred);
+    console.log(
+      cred.refresh_token
+        ? "Token y refresh token extraídos del HAR y guardados."
+        : "Token extraído del HAR y guardado (sin refresh token: el HAR no incluía el login).",
+    );
 
     const paciente = extractPacienteFromHar(content);
     if (paciente) {
@@ -213,20 +306,20 @@ export async function cmdLogin(opts: LoginOptions = {}): Promise<void> {
       console.log(`Paciente guardado: ${pacienteLabel(paciente)}`);
     }
 
-    await validateAndPrint(jwt);
+    await validateAndPrint(cred.access_token);
     return;
   }
 
   // Plan A — navegador headed + captura automática (Playwright).
   const result = await loginWithBrowser();
   if (result) {
-    await saveToken(result.jwt);
+    await saveCredenciales(result.cred);
     if (result.paciente) {
       await savePaciente(result.paciente);
       console.log(`Paciente guardado: ${pacienteLabel(result.paciente)}`);
     }
     try {
-      await validateAndPrint(result.jwt);
+      await validateAndPrint(result.cred.access_token);
     } catch (err) {
       console.error(String(err));
       process.exit(1);

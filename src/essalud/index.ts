@@ -28,15 +28,15 @@ export function makeEssaludCommand(): Command {
 
   essalud
     .command("login")
-    .description(
-      "Login asistido: abre browser headed, captura el Bearer token de EsSalud y lo guarda.",
-    )
+    .description("Login asistido: abre browser headed, captura la sesión de EsSalud y la guarda.")
     .option("--token <jwt>", "Pegar el JWT directamente (sin abrir browser)")
-    .option("--from-har <path>", "Importar token desde un HAR exportado de DevTools")
-    .action((opts: { token?: string; fromHar?: string }) => {
+    .option("--from-har <path>", "Importar la sesión desde un HAR exportado de DevTools")
+    .option("--renovar", "Renovar con el refresh token guardado (sin browser ni captcha)")
+    .action((opts: { token?: string; fromHar?: string; renovar?: boolean }) => {
       const loginOpts: LoginOptions = {
         token: opts.token,
         fromHar: opts.fromHar,
+        renovar: opts.renovar,
       };
       return cmdLogin(loginOpts);
     });
