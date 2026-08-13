@@ -137,12 +137,14 @@ async function loadPreviousSnapshot(
   try {
     const snapshot = await dependencies.loadState(path);
     if (snapshot && !targetMatches(snapshot.target, target)) {
-      dependencies.warn(`El estado guardado pertenece a otro watch; se creará un baseline nuevo.`);
+      dependencies.warn(
+        "El estado guardado pertenece a otro monitoreo; se creará un estado inicial nuevo.",
+      );
       return null;
     }
     return snapshot;
   } catch (error) {
-    dependencies.warn(`${String(error)}. Se creará un baseline nuevo sin enviar alertas.`);
+    dependencies.warn(`${String(error)}. Se creará un estado inicial nuevo sin enviar alertas.`);
     return null;
   }
 }
@@ -193,7 +195,7 @@ export async function runWatch(
       failures = 0;
 
       dependencies.log(
-        `[${new Date(dependencies.now()).toLocaleTimeString("es-PE")}] ${currentSlots.length} slots disponibles · ${newSlots.length} nuevos`,
+        `[${new Date(dependencies.now()).toLocaleTimeString("es-PE")}] ${currentSlots.length} cupos disponibles · ${newSlots.length} nuevos`,
       );
 
       await dependencies.sleep(
@@ -217,7 +219,7 @@ export async function runWatch(
       }
 
       if (!isTransientError(error)) {
-        dependencies.warn(`El watch se detuvo: ${String(error)}`);
+        dependencies.warn(`El monitoreo se detuvo: ${String(error)}`);
         return "fatal-error";
       }
 

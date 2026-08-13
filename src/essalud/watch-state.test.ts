@@ -49,7 +49,7 @@ afterEach(async () => {
 });
 
 describe("watchStatePath", () => {
-  it("crea rutas distintas y seguras para cada target", async () => {
+  it("crea rutas distintas y seguras para cada búsqueda", async () => {
     const directory = await temporaryDirectory();
     const first = watchStatePath(target, directory);
     const second = watchStatePath({ ...target, codActSubAct: "../otra" }, directory);
@@ -71,8 +71,8 @@ describe("watchStatePath", () => {
   });
 });
 
-describe("persistencia del estado de watch", () => {
-  it("guarda y carga un snapshot con permisos privados", async () => {
+describe("persistencia del estado del monitoreo", () => {
+  it("guarda y carga un estado con permisos privados", async () => {
     const directory = await temporaryDirectory();
     const path = watchStatePath(target, directory);
     const expected = snapshot();

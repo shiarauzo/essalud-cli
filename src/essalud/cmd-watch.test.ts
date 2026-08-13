@@ -63,7 +63,7 @@ function dependencies(
 }
 
 describe("runWatch", () => {
-  it("guarda el primer poll como baseline sin notificar", async () => {
+  it("guarda la primera consulta como estado inicial sin notificar", async () => {
     const controller = new AbortController();
     const deps = dependencies(controller);
 
@@ -75,7 +75,7 @@ describe("runWatch", () => {
     );
   });
 
-  it("notifica únicamente los slots añadidos desde el snapshot anterior", async () => {
+  it("notifica únicamente los cupos añadidos desde el estado anterior", async () => {
     const controller = new AbortController();
     const previous = snapshot([cupo()]);
     const added = cupo({
@@ -161,7 +161,7 @@ describe("runWatch", () => {
 
     expect(await runWatch(target, 300_000, controller.signal, deps)).toBe("fatal-error");
     expect(deps.sleep).not.toHaveBeenCalled();
-    expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining("El watch se detuvo"));
+    expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining("El monitoreo se detuvo"));
   });
 
   it("renueva un access token vencido antes de consultar", async () => {
@@ -224,7 +224,7 @@ describe("runWatch", () => {
     expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining("sesión todavía vigente"));
   });
 
-  it("recorre la secuencia completa baseline → sin cambios → fallo transitorio → slot nuevo → sin cambios; genera exactamente una notificación", async () => {
+  it("recorre estado inicial → sin cambios → fallo transitorio → cupo nuevo → sin cambios; genera una notificación", async () => {
     // Este test agrupa los cinco escenarios en una sola ejecución de runWatch
     // para probar que el estado sobrevive el fallo y que no se duplican alertas.
     const controller = new AbortController();
@@ -235,14 +235,13 @@ describe("runWatch", () => {
       vCupoDisp: [{ hora: "08:00", nroCupo: 5 }],
     });
 
-    // Secuencia de respuestas: baseline, igual, fallo, nuevo, igual-de-nuevo
     const getCupos = vi
       .fn()
-      .mockResolvedValueOnce([slotA]) // poll 1: baseline (sin estado previo)
-      .mockResolvedValueOnce([slotA]) // poll 2: sin cambios
-      .mockRejectedValueOnce(new TypeError("fetch failed")) // poll 3: error transitorio
-      .mockResolvedValueOnce([slotA, slotB]) // poll 4: slotB es genuinamente nuevo
-      .mockResolvedValueOnce([slotA, slotB]); // poll 5: sin cambios, no debe duplicar
+      .mockResolvedValueOnce([slotA])
+      .mockResolvedValueOnce([slotA])
+      .mockRejectedValueOnce(new TypeError("fetch failed"))
+      .mockResolvedValueOnce([slotA, slotB])
+      .mockResolvedValueOnce([slotA, slotB]);
 
     let sleepCount = 0;
     const sleep = vi.fn().mockImplementation(async () => {
@@ -256,17 +255,14 @@ describe("runWatch", () => {
     expect(result).toBe("stopped");
     expect(getCupos).toHaveBeenCalledTimes(5);
 
-    // Solo se notifica una vez: el slot nuevo del poll 4
     expect(deps.notifier.notify).toHaveBeenCalledOnce();
     expect(deps.notifier.notify).toHaveBeenCalledWith({
       target,
       slots: [expect.objectContaining({ fechaCitaProg: "05/09/2026", nroCupo: 5 })],
     });
 
-    // saveState solo se llama en polls exitosos (1, 2, 4, 5); el fallo del poll 3 no reemplaza el estado
     expect(deps.saveState).toHaveBeenCalledTimes(4);
 
-    // La advertencia de reintento aparece exactamente una vez (poll 3)
     expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining("Reintentando"));
   });
 });

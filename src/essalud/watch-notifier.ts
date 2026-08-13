@@ -18,6 +18,10 @@ export type NativeCommandRunner = (command: string, args: string[]) => Promise<v
 const MAX_TERMINAL_SLOTS = 10;
 const MAX_DESKTOP_SLOTS = 3;
 
+function newSlotsLabel(count: number): string {
+  return `${count} ${count === 1 ? "cupo nuevo" : "cupos nuevos"}`;
+}
+
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'"'"'`)}'`;
 }
@@ -40,7 +44,7 @@ export function formatNewSlots(event: NewSlotsEvent): string {
   const visible = event.slots.slice(0, MAX_TERMINAL_SLOTS);
   const lines = [
     "",
-    `🔔 ${event.slots.length} ${event.slots.length === 1 ? "cupo nuevo" : "cupos nuevos"} en EsSalud`,
+    `🔔 ${newSlotsLabel(event.slots.length)} en EsSalud`,
     ...visible.map(
       (slot) =>
         `  • ${slot.fechaCitaProg} ${slot.hora} · ${slot.apeNomProf} · consultorio ${slot.consultorio}`,
@@ -131,7 +135,7 @@ export class DesktopNotifier implements Notifier {
   }
 
   async notify(event: NewSlotsEvent): Promise<void> {
-    const title = `EsSalud: ${event.slots.length} ${event.slots.length === 1 ? "cupo nuevo" : "cupos nuevos"}`;
+    const title = `EsSalud: ${newSlotsLabel(event.slots.length)}`;
     const visible = event.slots.slice(0, MAX_DESKTOP_SLOTS);
     const body = visible
       .map((slot) => `${slot.fechaCitaProg} ${slot.hora} · ${slot.apeNomProf}`)

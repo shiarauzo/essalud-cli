@@ -61,11 +61,11 @@ export async function loadWatchState(path: string): Promise<WatchSnapshot | null
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new Error(`El estado de watch no contiene JSON válido: ${path}`);
+    throw new Error(`El estado de monitoreo no contiene JSON válido: ${path}`);
   }
 
   if (!isWatchSnapshot(parsed)) {
-    throw new Error(`El estado de watch tiene un formato incompatible: ${path}`);
+    throw new Error(`El estado de monitoreo tiene un formato incompatible: ${path}`);
   }
   return parsed;
 }

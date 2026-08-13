@@ -98,7 +98,7 @@ describe("normalizeCupos", () => {
 });
 
 describe("findNewSlots", () => {
-  it("devuelve únicamente los slots que no estaban en el snapshot anterior", () => {
+  it("devuelve únicamente los cupos que no estaban en el estado anterior", () => {
     const previous = normalizeCupos([cupo()]);
     const current = normalizeCupos([
       cupo(),
@@ -108,15 +108,13 @@ describe("findNewSlots", () => {
     expect(findNewSlots(previous, current)).toEqual([current[1]]);
   });
 
-  it("trata como nuevo un slot que reaparece después de un snapshot vacío", () => {
+  it("trata como nuevo un cupo que reaparece después de un estado vacío", () => {
     const current = normalizeCupos([cupo()]);
     expect(findNewSlots([], current)).toEqual(current);
   });
 });
 
 describe("estrés con miles de cupos", () => {
-  // Verifica que la normalización y el diff son correctos a gran escala:
-  // duplicados exactos, valores inválidos de nroCupo y conjuntos parcialmente solapados.
   it("normaliza miles de cupos con duplicados y nroCupo inválidos sin errores ni colisiones", () => {
     const CUPOS_UNICOS = 300;
     const SLOTS_VALIDOS_POR_CUPO = 4;
@@ -130,12 +128,10 @@ describe("estrés con miles de cupos", () => {
       turnoIni: "07:00",
       turnoFin: "13:00",
       vCupoDisp: [
-        // Slots válidos: horas 07:00–10:00, nroCupo 1–4
         ...Array.from({ length: SLOTS_VALIDOS_POR_CUPO }, (_, j) => ({
           hora: `${String(7 + j).padStart(2, "0")}:00`,
           nroCupo: j + 1,
         })),
-        // Slots inválidos que deben descartarse
         { hora: "11:00", nroCupo: Number.NaN },
         { hora: "11:30", nroCupo: Number.POSITIVE_INFINITY },
         { hora: "11:45", nroCupo: "1; rm -rf /" as unknown as number },
@@ -143,25 +139,20 @@ describe("estrés con miles de cupos", () => {
       ],
     }));
 
-    // Agrega 50 duplicados exactos al inicio para verificar deduplicación a escala
     const cuposConDuplicados: Cupo[] = [...base.slice(0, 50), ...base];
 
     const slots = normalizeCupos(cuposConDuplicados);
 
-    // Solo los slots válidos y únicos sobreviven
     expect(slots).toHaveLength(CUPOS_UNICOS * SLOTS_VALIDOS_POR_CUPO);
     expect(slots.every((s) => Number.isSafeInteger(s.nroCupo))).toBe(true);
 
-    // Todas las claves son únicas (sin colisiones por el Map interno)
     const claves = slots.map((s) => s.key);
     expect(new Set(claves).size).toBe(slots.length);
 
-    // findNewSlots: la primera mitad como "anterior" → exactamente la segunda mitad es nueva
     const mitad = Math.floor(slots.length / 2);
     const nuevos = findNewSlots(slots.slice(0, mitad), slots);
     expect(nuevos).toHaveLength(slots.length - mitad);
 
-    // Ningún slot de la mitad anterior aparece entre los nuevos
     const clavesAnteriores = new Set(slots.slice(0, mitad).map((s) => s.key));
     expect(nuevos.every((s) => !clavesAnteriores.has(s.key))).toBe(true);
   });
