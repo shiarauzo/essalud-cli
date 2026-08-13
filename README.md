@@ -5,7 +5,8 @@ CLI **no oficial** para reservar y cancelar citas de EsSalud desde la terminal.
 > ⚠️ **Disclaimer.** Proyecto independiente, **no afiliado a EsSalud**. Usa la API
 > pública de su portal de citas mediante ingeniería inversa, así que puede dejar de
 > funcionar si EsSalud cambia su backend. Usalo bajo tu responsabilidad.
-> **Tu token y tus datos nunca salen de tu máquina** (se guardan localmente con permisos `600`).
+> Las credenciales se guardan localmente con permisos `600` y el CLI solo las envía
+> a la API HTTPS de EsSalud para autenticar tus solicitudes.
 
 ## Requisitos
 
@@ -119,12 +120,17 @@ El flujo "Reservar una cita" es guiado: especialidad → actividad → cupo disp
 | `essalud reservar` | Reservar cita (requiere `--confirm` para el POST real) |
 | `essalud cancelar <citActMedNum>` | Cancelar cita (requiere `--confirm`) |
 
-## Token
+## Credenciales
 
-El token JWT se guarda en `~/.essalud/token` (chmod `600`).
-Para obtenerlo: `essalud login`, o manualmente con `essalud login --token <jwt>`.
+El access token se guarda en `~/.essalud/token` y, cuando está disponible, el refresh
+token en `~/.essalud/refresh_token`. Ambos archivos usan permisos `600`.
 
-**El token nunca sale de tu máquina.**
+El CLI envía el access token únicamente a la API HTTPS de EsSalud como credencial de
+autenticación. Para renovar una sesión, envía el refresh token al endpoint HTTPS
+`/retoken` de esa misma API.
+
+Para obtenerlos: `essalud login`, o manualmente con `essalud login --token <jwt>`
+(este último método no guarda un refresh token).
 
 ## Desarrollo
 

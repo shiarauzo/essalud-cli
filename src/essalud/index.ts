@@ -7,7 +7,6 @@ import { cmdLogin, type LoginOptions } from "./cmd-login.js";
 import { cmdPerfil } from "./cmd-perfil.js";
 import { cmdReservar, type ReservarOptions } from "./cmd-reservar.js";
 import { cmdToken } from "./cmd-token.js";
-import { cmdWatch } from "./cmd-watch.js";
 import { runInteractiveMode } from "./interactive.js";
 
 export function makeEssaludCommand(): Command {
@@ -56,24 +55,6 @@ export function makeEssaludCommand(): Command {
     )
     .action((codCentro: string, codServicioHosp: string, codActSubAct: string) =>
       cmdFechas(codCentro, codServicioHosp, codActSubAct),
-    );
-
-  essalud
-    .command("watch <codCentro> <codServicioHosp> <codActSubAct>")
-    .description("Monitorea cupos nuevos periódicamente (solo lectura).")
-    .option("--interval <duracion>", "Intervalo entre consultas (mínimo 2m)", "5m")
-    .option("--notify <modo>", "Notificación terminal o desktop", "terminal")
-    .action(
-      (
-        codCentro: string,
-        codServicioHosp: string,
-        codActSubAct: string,
-        opts: { interval?: string; notify?: string },
-      ) =>
-        cmdWatch(codCentro, codServicioHosp, codActSubAct, {
-          interval: opts.interval,
-          notify: opts.notify,
-        }),
     );
 
   essalud

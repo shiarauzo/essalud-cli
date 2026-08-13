@@ -38,11 +38,11 @@ const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 // ---------------------------------------------------------------------------
 
 export interface LoginOptions {
-  /** JWT to save directly (skip browser) */
+  /** JWT que se guardará directamente (sin abrir el navegador). */
   token?: string;
-  /** Path to a HAR file to extract the token from */
+  /** Ruta del archivo HAR del que se extraerá la sesión. */
   fromHar?: string;
-  /** Renew the session using the stored refresh token. */
+  /** Renueva la sesión usando el refresh token guardado. */
   renovar?: boolean;
 }
 

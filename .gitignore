@@ -3,5 +3,8 @@ dist/
 *.env
 .env*
 
+# Exportaciones de DevTools pueden contener credenciales y datos personales
+*.har
+
 # Tarballs de npm pack
 *.tgz
