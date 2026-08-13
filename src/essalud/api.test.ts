@@ -111,9 +111,14 @@ describe("renovarSesion", () => {
     expect(init.headers).not.toHaveProperty("Authorization");
   });
 
-  it("devuelve null cuando /retoken responde error", async () => {
-    mockFetchSequence([{ status: 500, body: {} }]);
+  it("devuelve null cuando /retoken rechaza el refresh", async () => {
+    mockFetchSequence([{ status: 400, body: { error: "invalid_grant" } }]);
     await expect(renovarSesion()).resolves.toBeNull();
+  });
+
+  it("propaga errores transitorios para que el llamador pueda reintentar", async () => {
+    mockFetchSequence([{ status: 500, body: {} }]);
+    await expect(renovarSesion()).rejects.toThrow(/HTTP 500/);
   });
 });
 

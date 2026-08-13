@@ -114,32 +114,34 @@ export function parseCredenciales(json: unknown): Credenciales | null {
  * Renueva la sesión con POST /retoken usando el refresh token guardado.
  * EsSalud rota el par en cada llamada (access y refresh vencen juntos, 24h), así
  * que renovar seguido mantiene la sesión viva sin navegador ni captcha.
- * Devuelve el access token nuevo, o null si no se pudo renovar.
+ * Devuelve el access token nuevo, o null si el refresh fue rechazado.
+ * Los errores transitorios se propagan para que el llamador pueda reintentar.
  */
 export async function renovarSesion(): Promise<string | null> {
   const refresh = await readRefreshToken();
   if (!refresh) return null;
 
-  try {
-    // Sin Authorization a propósito: /retoken es público y solo valida el refresh
-    // token del body. Mandar el access token vencido hace que el filtro de
-    // seguridad responda 403 antes de llegar al handler.
-    const res = await fetch(`${BASE_URL}/retoken`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({ refresh_token: refresh }),
-    });
-    if (!res.ok) return null;
-    const cred = parseCredenciales(await res.json());
-    if (!cred) return null;
-    await saveCredenciales(cred);
-    return cred.access_token;
-  } catch {
+  // Sin Authorization a propósito: /retoken es público y solo valida el refresh
+  // token del body. Mandar el access token vencido hace que el filtro de
+  // seguridad responda 403 antes de llegar al handler.
+  const res = await fetch(`${BASE_URL}/retoken`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ refresh_token: refresh }),
+  });
+  if (!res.ok) {
+    if (res.status === 429 || res.status >= 500) {
+      throw new Error(`HTTP ${res.status} ${res.statusText} — POST /retoken`);
+    }
     return null;
   }
+  const cred = parseCredenciales(await res.json());
+  if (!cred) return null;
+  await saveCredenciales(cred);
+  return cred.access_token;
 }
 
 /** Envoltorio estándar de respuestas de EsSalud.
